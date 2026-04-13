@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+
+  --color-background: #040a2f;
+  --color-on-background: #e2e4ff;
+  --color-primary: #89acff;
+  --color-on-primary: #002b6a;
+  --color-secondary: #ff7520;
+  --color-on-secondary: #3c1400;
+  --color-tertiary: #81ecff;
+  --color-on-tertiary: #003840;
+  
+  --color-surface-container: #0c1542;
+  --color-surface-container-low: #070f38;
+  --color-surface-container-high: #111b4c;
+  --color-surface-bright: #1c2760;
+  --color-outline: #6c739d;
+  --color-outline-variant: #3f456c;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-background font-body;
+  }
+}
+
+.glass-panel {
+  background: rgba(17, 27, 76, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(63, 69, 108, 0.15);
+}
+
+.sheet-canvas {
+  background-image: radial-gradient(circle, #e2e4ff 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
