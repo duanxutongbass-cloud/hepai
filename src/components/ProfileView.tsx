@@ -78,7 +78,7 @@ export default function ProfileView({ onBack, onViewChange }: ProfileViewProps) 
         <section className="flex flex-col items-center text-center space-y-4">
           <div className="relative group">
             <div className="w-32 h-32 bg-primary/10 rounded-full flex items-center justify-center border-4 border-background shadow-xl overflow-hidden">
-              {avatar ? (
+              {avatar instanceof Blob ? (
                 <img src={URL.createObjectURL(avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <User className="w-16 h-16 text-primary" />

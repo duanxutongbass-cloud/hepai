@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Edit3, Highlighter, Eraser, Mic, Layers, Trash2, Grid, CheckCircle, Bell, Menu, PlayCircle, RefreshCw, Music, Download, Loader2, Save, Undo, Type, X, MousePointer2, Maximize2, Minimize2, PenTool, Settings2, Play, Pause, Volume2, Activity, Share2, Radio, Heart, ShieldAlert, UserCog, MessageSquare, Battery, Wifi, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, Highlighter, Eraser, Mic, Layers, Trash2, Grid, CheckCircle, Bell, Menu, PlayCircle, RefreshCw, Music, Download, Loader2, Save, Undo, Type, X, MousePointer2, Maximize2, Minimize2, PenTool, Settings2, Play, Pause, Volume2, Activity, Share2, Radio, Heart, ShieldAlert, UserCog, MessageSquare, Battery, Wifi, ChevronDown, AlertCircle } from 'lucide-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import CanvasDraw from 'react-canvas-draw';
 import { storageService, ScoreData, PlacedObject } from '../services/storageService';
@@ -9,7 +9,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 // Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ReaderViewProps {
   onBack: () => void;
@@ -32,6 +32,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   const [isOffline, setIsOffline] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [pdfFile, setPdfFile] = useState<string | Blob | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [scoreData, setScoreData] = useState<ScoreData | null>(null);
   const [currentPartIndex, setCurrentPartIndex] = useState<number>(-1); // -1 means main score
@@ -44,6 +45,8 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen || false);
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
   const [isSymbolsPanelOpen, setIsSymbolsPanelOpen] = useState(false);
+  const [isAnnotationPanelOpen, setIsAnnotationPanelOpen] = useState(false);
+  const [isBluetoothPanelOpen, setIsBluetoothPanelOpen] = useState(false);
   const [showUI, setShowUI] = useState(!initialFullscreen);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -58,8 +61,29 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   const [isRoleRequestOpen, setIsRoleRequestOpen] = useState(false);
   const [latency, setLatency] = useState(12);
   const [battery, setBattery] = useState(85);
+  const [readingMode, setReadingMode] = useState<'normal' | 'sepia' | 'night'>('normal');
+  const [isTwoPageView, setIsTwoPageView] = useState(false);
+  const [brightness, setBrightness] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [isSmartCrop, setIsSmartCrop] = useState(false);
+  const [isDisplayMenuOpen, setIsDisplayMenuOpen] = useState(false);
+  const [pedalConfig, setPedalConfig] = useState<any>(null);
+  const [hasDraft, setHasDraft] = useState(false);
   const metronomeAudioContext = useRef<AudioContext | null>(null);
   const globalStartTimeRef = useRef<number>(Date.now());
+
+  // PDF URL Management
+  useEffect(() => {
+    if (pdfFile instanceof Blob) {
+      const url = URL.createObjectURL(pdfFile);
+      setPdfUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else if (typeof pdfFile === 'string') {
+      setPdfUrl(pdfFile);
+    } else {
+      setPdfUrl(null);
+    }
+  }, [pdfFile]);
 
   // Sync Listener
   useEffect(() => {
@@ -164,7 +188,47 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
     updateWidth();
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
-  }, [isFullscreen, orientation]);
+  }, [isFullscreen, orientation, zoom]);
+
+  // Auto-save draft
+  useEffect(() => {
+    if (!scoreId || placedObjects.length === 0) return;
+    const saveDraft = () => {
+      localStorage.setItem(`draft_${scoreId}`, JSON.stringify({
+        objects: placedObjects,
+        timestamp: Date.now()
+      }));
+    };
+    const timer = setInterval(saveDraft, 5000);
+    return () => clearInterval(timer);
+  }, [scoreId, placedObjects]);
+
+  useEffect(() => {
+    if (scoreId) {
+      const draft = localStorage.getItem(`draft_${scoreId}`);
+      if (draft) {
+        setHasDraft(true);
+      }
+    }
+  }, [scoreId]);
+
+  const recoverDraft = () => {
+    if (!scoreId) return;
+    const draft = localStorage.getItem(`draft_${scoreId}`);
+    if (draft) {
+      const { objects } = JSON.parse(draft);
+      setPlacedObjects(objects);
+      setHasDraft(false);
+      localStorage.removeItem(`draft_${scoreId}`);
+    }
+  };
+
+  const getReadingModeFilter = () => {
+    let filter = `brightness(${brightness})`;
+    if (readingMode === 'sepia') filter += ' sepia(0.6) contrast(0.9)';
+    if (readingMode === 'night') filter += ' invert(0.9) hue-rotate(180deg)';
+    return filter;
+  };
 
   useEffect(() => {
     const loadScore = async () => {
@@ -209,6 +273,58 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
     };
     loadScore();
   }, [scoreId]);
+
+  // Load Pedal Config & Reader Settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      const meta = await storageService.getMetadata();
+      setPedalConfig(meta.pedalConfig);
+      if (meta.readerSettings) {
+        setReadingMode(meta.readerSettings.mode);
+        setBrightness(meta.readerSettings.brightness);
+        setZoom(meta.readerSettings.zoom);
+        setIsTwoPageView(meta.readerSettings.isTwoPageView);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Save Reader Settings
+  useEffect(() => {
+    const saveSettings = async () => {
+      await storageService.saveMetadata({
+        readerSettings: {
+          mode: readingMode,
+          brightness,
+          zoom,
+          isTwoPageView
+        }
+      });
+    };
+    saveSettings();
+  }, [readingMode, brightness, zoom, isTwoPageView]);
+
+  // Bluetooth Pedal Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!pedalConfig?.enabled) return;
+      
+      if (pedalConfig.nextPageKeys.includes(e.key)) {
+        if (pageNumber < numPages) {
+          setPageNumber(prev => prev + 1);
+          e.preventDefault();
+        }
+      } else if (pedalConfig.prevPageKeys.includes(e.key)) {
+        if (pageNumber > 1) {
+          setPageNumber(prev => prev - 1);
+          e.preventDefault();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pedalConfig, pageNumber, numPages]);
 
   const handlePartChange = (index: number) => {
     if (!scoreData) return;
@@ -357,8 +473,8 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   const handleCanvasChange = () => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveCurrentPageState();
-    }, 1000); // Debounce save for 1 second after drawing
+      saveSpecificPageState(placedObjects, false);
+    }, 500); // Faster debounce
   };
 
   const handleScoreClick = (e: React.MouseEvent) => {
@@ -398,6 +514,14 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
         if (pageNumber < numPages) setPageNumber(prev => prev + 1);
         return;
       }
+      
+      // Middle tap toggles UI
+      setShowUI(!showUI);
+      return;
+    }
+
+    // If in stamp/text mode, but clicking in the middle, still toggle UI
+    if (x > width * 0.3 && x < width * 0.7) {
       setShowUI(!showUI);
       return;
     }
@@ -484,7 +608,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   };
 
   useEffect(() => {
-    if (scoreData?.audioBlob && !audioRef.current) {
+    if (scoreData?.audioBlob instanceof Blob && !audioRef.current) {
       const url = URL.createObjectURL(scoreData.audioBlob);
       audioRef.current = new Audio(url);
       
@@ -722,266 +846,248 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           </div>
         )}
       </AnimatePresence>
-      <header className={`bg-background flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <button onClick={onBack} className="text-primary hover:bg-surface-container-high p-1.5 sm:p-2 rounded-xl transition-all">
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+      {/* Unified Navigation Bar */}
+
+      <nav className={`fixed top-0 left-0 right-0 h-20 bg-surface-bright/80 backdrop-blur-2xl border-b border-outline-variant/10 flex items-center justify-between px-4 sm:px-8 z-[120] transition-all duration-500 ${showUI ? 'translate-y-0' : '-translate-y-full'}`}>
+        <div className="flex items-center gap-2 sm:gap-6">
+          <button 
+            onClick={onBack}
+            className="p-2 sm:p-3 hover:bg-surface-container rounded-2xl transition-all active:scale-90"
+          >
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-on-background" />
           </button>
-          <h1 className="text-lg sm:text-xl font-bold text-primary tracking-widest uppercase font-headline">合拍</h1>
+          <div className="hidden xs:block">
+            <h1 className="text-sm sm:text-xl font-headline font-bold text-on-background tracking-tight truncate max-w-[120px] sm:max-w-[200px]">
+              {scoreData?.title || '加载中...'}
+            </h1>
+            <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-on-background/40 uppercase tracking-widest">
+              <span>{currentPartIndex === -1 ? '总谱' : scoreData?.parts[currentPartIndex].name}</span>
+              <span>•</span>
+              <span>P.{pageNumber} / {numPages}</span>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+
+        <div className="flex items-center gap-2 bg-surface-container/50 p-1 rounded-2xl border border-outline-variant/10">
+          <button 
+            onClick={() => {
+              setIsAnnotationPanelOpen(!isAnnotationPanelOpen);
+              setIsSymbolsPanelOpen(false);
+              setIsBluetoothPanelOpen(false);
+              setIsMetronomeOpen(false);
+              setIsPartsMenuOpen(false);
+              setIsDisplayMenuOpen(false);
+            }}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all ${isAnnotationPanelOpen ? 'bg-primary text-on-primary shadow-lg' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+          >
+            {activeTool === 'select' && <MousePointer2 className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {activeTool === 'edit' && <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {activeTool === 'highlight' && <Highlighter className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {activeTool === 'eraser' && <Eraser className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {activeTool === 'stamp' && <PenTool className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {activeTool === 'text' && <Type className="w-4 h-4 sm:w-5 sm:h-5" />}
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest hidden md:inline">
+              {activeTool === 'select' ? '选择' : 
+               activeTool === 'edit' ? '画笔' : 
+               activeTool === 'highlight' ? '荧光笔' : 
+               activeTool === 'eraser' ? '橡皮擦' : 
+               activeTool === 'stamp' ? '符号' : '文字'}
+            </span>
+            <ChevronDown className={`w-3 h-3 sm:w-4 sm:h-4 transition-transform ${isAnnotationPanelOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1 bg-surface-container/50 p-1 rounded-xl">
+            <button 
+              onClick={handleManualSave}
+              disabled={isManualSaving}
+              className={`p-2 rounded-lg transition-all ${isManualSaving ? 'bg-tertiary text-on-tertiary animate-pulse' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="保存"
+            >
+              {isManualSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            </button>
+            <button 
+              onClick={handleToggleFavorite}
+              className={`p-2 rounded-lg transition-all ${scoreData?.isFavorite ? 'text-secondary' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="收藏"
+            >
+              <Heart className={`w-4 h-4 ${scoreData?.isFavorite ? 'fill-secondary' : ''}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 bg-surface-container/50 p-1 rounded-xl">
+            <button 
+              onClick={() => {
+                setIsBluetoothPanelOpen(!isBluetoothPanelOpen);
+                setIsAnnotationPanelOpen(false);
+                setIsMetronomeOpen(false);
+                setIsPartsMenuOpen(false);
+                setIsDisplayMenuOpen(false);
+              }}
+              className={`p-2 rounded-lg transition-all ${isBluetoothPanelOpen ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="蓝牙翻页器"
+            >
+              <Radio className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => {
+                setIsMetronomeOpen(!isMetronomeOpen);
+                setIsAnnotationPanelOpen(false);
+                setIsBluetoothPanelOpen(false);
+                setIsPartsMenuOpen(false);
+                setIsDisplayMenuOpen(false);
+              }}
+              className={`p-2 rounded-lg transition-all ${isMetronomeOpen ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="节拍器"
+            >
+              <Activity className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => {
+                setIsPartsMenuOpen(!isPartsMenuOpen);
+                setIsAnnotationPanelOpen(false);
+                setIsBluetoothPanelOpen(false);
+                setIsMetronomeOpen(false);
+                setIsDisplayMenuOpen(false);
+              }}
+              className={`p-2 rounded-lg transition-all ${isPartsMenuOpen ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="声部选择"
+            >
+              <Layers className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => {
+                setIsDisplayMenuOpen(!isDisplayMenuOpen);
+                setIsAnnotationPanelOpen(false);
+                setIsBluetoothPanelOpen(false);
+                setIsMetronomeOpen(false);
+                setIsPartsMenuOpen(false);
+              }}
+              className={`p-2 rounded-lg transition-all ${isDisplayMenuOpen ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:bg-surface-container-high'}`}
+              title="显示设置"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="h-8 w-[1px] bg-outline-variant/20 mx-1" />
+
           <button 
             onClick={toggleFullscreen}
-            className="p-1.5 sm:p-2 rounded-xl text-primary hover:bg-surface-container-high transition-all"
-            title={isFullscreen ? "退出全屏" : "全屏模式"}
+            className="p-3 bg-surface-container-high hover:bg-surface-bright rounded-2xl text-on-background/60 transition-all active:scale-90"
           >
-            {isFullscreen ? <Minimize2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6" />}
-          </button>
-          <button 
-            onClick={handleToggleFavorite}
-            className={`p-1.5 sm:p-2 rounded-xl transition-all ${scoreData?.isFavorite ? 'text-secondary' : 'text-primary hover:bg-surface-container-high'}`}
-            title={scoreData?.isFavorite ? "取消收藏" : "收藏乐谱"}
-          >
-            <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${scoreData?.isFavorite ? 'fill-secondary' : ''}`} />
-          </button>
-          <div className="hidden sm:flex items-center gap-3">
-            {isOffline ? (
-              <div className="flex items-center gap-2 bg-tertiary/10 px-3 py-1.5 rounded-full border border-tertiary/20">
-                <CheckCircle className="text-tertiary w-4 h-4 fill-tertiary/20" />
-                <span className="text-[10px] font-bold text-tertiary uppercase tracking-tighter">已下载 - 离线可用</span>
-              </div>
-            ) : (
-              <button 
-                onClick={handleSaveOffline}
-                disabled={isSaving}
-                className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full border border-primary/20 transition-all"
-              >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Download className="text-primary w-4 h-4" />}
-                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">
-                  {isSaving ? '正在下载...' : '下载以离线使用'}
-                </span>
-              </button>
-            )}
-          </div>
-          <button 
-            onClick={handleManualSave}
-            disabled={isManualSaving}
-            className={`p-1.5 sm:p-2 rounded-xl transition-all flex items-center gap-2 ${
-              isManualSaving ? 'bg-tertiary/20 text-tertiary' : 'text-primary hover:bg-surface-container-high'
-            }`}
-            title="保存所有更改"
-          >
-            {isManualSaving ? (
-              <>
-                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter hidden sm:inline">保存中...</span>
-              </>
-            ) : (
-              <Save className="w-5 h-5 sm:w-6 sm:h-6" />
-            )}
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
         </div>
-      </header>
-
-      <nav className={`bg-surface-container-low px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
-        <div className="flex items-center gap-2 overflow-hidden flex-1">
-          <span className="text-on-background/70 text-xs sm:text-sm font-medium truncate">{scoreData?.title || '正在加载...'}</span>
-          
-          {currentProgramIndex !== -1 && (
-            <div className="flex items-center gap-1 ml-2 sm:ml-4 bg-background p-1 rounded-lg border border-outline-variant/10 flex-shrink-0">
-              <button 
-                disabled={currentProgramIndex === 0}
-                onClick={() => handleNavigateProgram('prev')}
-                className={`p-1 rounded transition-all ${currentProgramIndex === 0 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
-                title="上一首"
-              >
-                <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-              </button>
-              <span className="text-[8px] sm:text-[10px] font-bold px-1 sm:px-2 text-on-background/50">
-                {currentProgramIndex + 1} / {programIds.length}
-              </span>
-              <button 
-                disabled={currentProgramIndex === programIds.length - 1}
-                onClick={() => handleNavigateProgram('next')}
-                className={`p-1 rounded transition-all ${currentProgramIndex === programIds.length - 1 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
-                title="下一首"
-              >
-                <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          )}
-
-          {scoreData?.parts && scoreData.parts.length > 0 && (
-            <>
-              <span className="text-outline-variant text-xs mx-2">|</span>
-              <div className="relative">
-                <button 
-                  onClick={() => setIsPartsMenuOpen(!isPartsMenuOpen)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-                    isPartsMenuOpen ? 'bg-primary text-on-primary' : 'bg-surface-container text-primary hover:bg-surface-bright'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  {currentPartIndex === -1 ? '总谱' : scoreData.parts[currentPartIndex].name}
-                  <ChevronDown className={`w-3 h-3 transition-transform ${isPartsMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                <AnimatePresence>
-                  {isPartsMenuOpen && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute bottom-full left-0 mb-2 w-48 bg-surface-container-high border border-outline-variant/10 rounded-2xl shadow-2xl py-2 z-50"
-                    >
-                      <button 
-                        onClick={() => { handlePartChange(-1); setIsPartsMenuOpen(false); }}
-                        className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === -1 ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
-                      >
-                        总谱 (Full Score)
-                      </button>
-                      <div className="h-px bg-outline-variant/10 my-1" />
-                      {scoreData.parts.map((part, idx) => {
-                        const isVisible = isAdmin || !part.assignedTo?.length || part.assignedTo.includes('VN');
-                        if (!isVisible) return null;
-
-                        return (
-                          <button 
-                            key={part.id}
-                            onClick={() => { handlePartChange(idx); setIsPartsMenuOpen(false); }}
-                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === idx ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
-                          >
-                            {part.name}
-                            <span className="ml-2 opacity-40 text-[10px]">[{part.assignedTo?.join(', ') || '未分配'}]</span>
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </>
-          )}
-          <span className="text-outline-variant text-xs mx-2">|</span>
-          <button 
-            onClick={() => setIsToolbarOpen(!isToolbarOpen)}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-              isToolbarOpen ? 'bg-primary text-on-primary' : 'bg-surface-container text-primary hover:bg-surface-bright'
-            }`}
-          >
-            <PenTool className="w-4 h-4" />
-            {isToolbarOpen ? '收起工具' : '开启批注'}
-          </button>
-          <span className="text-outline-variant text-xs mx-2">|</span>
-          <button 
-            onClick={() => setIsMetronomeOpen(!isMetronomeOpen)}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-              isMetronomeOpen ? 'bg-secondary text-on-secondary shadow-lg' : 'bg-surface-container text-secondary hover:bg-surface-bright'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            节拍器
-          </button>
-          {isAdmin && (
-            <>
-              <span className="text-outline-variant text-xs mx-2">|</span>
-              <button 
-                onClick={pushScore}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-                  isSyncing ? 'bg-tertiary text-on-tertiary' : 'bg-primary/10 text-primary hover:bg-primary/20'
-                }`}
-              >
-                <Share2 className={`w-4 h-4 ${isSyncing ? 'animate-pulse' : ''}`} />
-                推送乐谱
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center bg-background p-1 rounded-full border border-outline-variant/15">
-          <button 
-            onClick={() => setNoteType('personal')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-              noteType === 'personal' ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:text-on-background'
-            }`}
-          >
-            个人笔记
-          </button>
-          <button 
-            onClick={() => setNoteType('admin')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-              noteType === 'admin' ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:text-on-background'
-            }`}
-          >
-            管理员批注
-          </button>
-        </div>
-
-        {noteType === 'admin' && (
-          <div className="flex items-center gap-3 bg-secondary/10 px-4 py-2 rounded-xl border border-secondary/20 animate-pulse">
-            <RefreshCw className="text-secondary w-4 h-4 animate-spin-slow" />
-            <span className="text-xs font-bold text-secondary uppercase tracking-tight">管理员已更新批注</span>
-          </div>
-        )}
       </nav>
 
       <main className={`flex-1 relative overflow-hidden transition-all ${isFullscreen ? 'p-0' : 'p-4 md:p-8'}`}>
-        <section ref={containerRef} className={`w-full h-full overflow-y-auto custom-scrollbar bg-surface-container-low transition-all flex flex-col items-center ${isFullscreen ? 'p-0' : 'p-4'}`}>
-          <div 
-            className={`max-w-4xl w-full bg-white relative overflow-hidden min-h-[600px] flex justify-center transition-all duration-500 ${isFullscreen ? 'shadow-none rounded-none' : 'shadow-2xl rounded-lg'} ${orientation === 'landscape' ? 'rotate-90' : ''}`}
-            style={{ 
-              width: isFullscreen ? (orientation === 'landscape' ? '100vh' : '100vw') : containerWidth, 
-              height: isFullscreen ? (orientation === 'landscape' ? '100vw' : '100vh') : canvasHeight 
-            }}
-            onClick={handleScoreClick}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleDragEnd}
-            onMouseLeave={handleDragEnd}
-          >
-            {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                <Loader2 className="w-12 h-12 animate-spin text-primary" />
-              </div>
-            )}
-            
-            {/* PDF Layer */}
-            <div className="absolute inset-0 z-0 flex items-center justify-center">
-              {pdfFile && (
-                <Document
-                  file={pdfFile}
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  loading={<Loader2 className="w-12 h-12 animate-spin text-primary" />}
-                  className="flex justify-center"
-                >
-                  <Page 
-                    pageNumber={pageNumber} 
-                    width={isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth}
-                    renderAnnotationLayer={false}
-                    renderTextLayer={false}
-                  />
-                </Document>
+        {hasDraft && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[70] bg-secondary text-on-secondary px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4">
+            <AlertCircle className="w-5 h-5" />
+            <span className="text-sm font-bold">检测到未保存的批注草稿</span>
+            <button 
+              onClick={recoverDraft}
+              className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs font-bold transition-all"
+            >
+              立即恢复
+            </button>
+            <button 
+              onClick={() => { setHasDraft(false); localStorage.removeItem(`draft_${scoreId}`); }}
+              className="text-white/60 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <section 
+          ref={containerRef} 
+          className={`w-full h-full overflow-y-auto custom-scrollbar transition-all flex flex-col items-center ${isFullscreen ? 'p-0' : 'p-4'} ${readingMode === 'night' ? 'bg-black' : readingMode === 'sepia' ? 'bg-[#f4ecd8]' : 'bg-surface-container-low'}`}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={`${pageNumber}-${currentPartIndex}`}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className={`max-w-4xl w-full bg-white relative overflow-hidden min-h-[600px] flex justify-center transition-all duration-500 ${isFullscreen ? 'shadow-none rounded-none' : 'shadow-2xl rounded-lg'} ${orientation === 'landscape' ? 'rotate-90' : ''}`}
+              style={{ 
+                width: isFullscreen ? (orientation === 'landscape' ? '100vh' : '100vw') : (containerWidth * zoom), 
+                height: isFullscreen ? (orientation === 'landscape' ? '100vw' : '100vh') : (canvasHeight * zoom),
+                filter: getReadingModeFilter()
+              }}
+              onClick={handleScoreClick}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleDragEnd}
+              onMouseLeave={handleDragEnd}
+            >
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                </div>
               )}
-            </div>
+              
+              {/* PDF Layer */}
+              <div className={`absolute inset-0 z-0 flex items-center justify-center gap-4 transition-transform duration-500 ${isSmartCrop ? 'scale-[1.15]' : 'scale-100'}`}>
+                {pdfUrl && (
+                  <Document
+                    file={pdfUrl}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    onLoadError={(error) => console.error('PDF Load Error:', error)}
+                    loading={<Loader2 className="w-12 h-12 animate-spin text-primary" />}
+                    className="flex justify-center gap-4"
+                  >
+                    {isTwoPageView && orientation === 'landscape' && pageNumber > 1 && (
+                      <Page 
+                        pageNumber={pageNumber - 1} 
+                        width={(isFullscreen ? window.innerWidth : containerWidth) * 0.45 * zoom}
+                        renderAnnotationLayer={false}
+                        renderTextLayer={false}
+                      />
+                    )}
+                    <Page 
+                      pageNumber={pageNumber} 
+                      width={(isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth) * (isTwoPageView && orientation === 'landscape' ? 0.45 : 1) * zoom}
+                      renderAnnotationLayer={false}
+                      renderTextLayer={false}
+                    />
+                    {/* Pre-render next page */}
+                    {pageNumber < numPages && (
+                      <div className="hidden">
+                        <Page 
+                          pageNumber={pageNumber + 1} 
+                          width={(isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth) * (isTwoPageView && orientation === 'landscape' ? 0.45 : 1) * zoom}
+                          renderAnnotationLayer={false}
+                          renderTextLayer={false}
+                        />
+                      </div>
+                    )}
+                  </Document>
+                )}
+              </div>
 
-            {/* Drawing Layer */}
-            <div className={`absolute inset-0 z-10 ${activeTool === 'stamp' || activeTool === 'text' || activeTool === 'select' ? 'pointer-events-none' : ''}`}>
-              <CanvasDraw
-                ref={canvasRef}
-                canvasWidth={isFullscreen ? window.innerWidth : containerWidth}
-                canvasHeight={isFullscreen ? window.innerHeight : canvasHeight}
-                brushColor={activeTool === 'highlight' ? hexToRgba(activeColor, 0.3) : activeColor}
-                brushRadius={activeTool === 'highlight' ? 12 : 2}
-                lazyRadius={0}
-                backgroundColor="transparent"
-                hideGrid={true}
-                className="cursor-crosshair"
-                onChange={handleCanvasChange}
-              />
-            </div>
+              {/* Drawing Layer */}
+              <div className={`absolute inset-0 z-10 ${activeTool === 'stamp' || activeTool === 'text' || activeTool === 'select' ? 'pointer-events-none' : ''}`}>
+                <CanvasDraw
+                  ref={canvasRef}
+                  canvasWidth={isFullscreen ? window.innerWidth : containerWidth}
+                  canvasHeight={isFullscreen ? window.innerHeight : canvasHeight}
+                  brushColor={activeTool === 'highlight' ? hexToRgba(activeColor, 0.3) : activeColor}
+                  brushRadius={activeTool === 'highlight' ? 12 : 2}
+                  lazyRadius={0}
+                  backgroundColor="transparent"
+                  hideGrid={true}
+                  className="cursor-crosshair"
+                  onChange={handleCanvasChange}
+                />
+              </div>
 
-            {/* Objects Layer */}
-            <div className="absolute inset-0 z-20 pointer-events-none">
-              {placedObjects.map(obj => (
+              {/* Objects Layer */}
+              <div className="absolute inset-0 z-20 pointer-events-none">
+                {placedObjects.map(obj => (
                 <div 
                   key={obj.id}
                   className={`absolute pointer-events-auto group cursor-move ${draggingId === obj.id ? 'opacity-50 scale-110' : ''}`}
@@ -1029,10 +1135,134 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
             </div>
 
             <div className="absolute inset-0 sheet-canvas pointer-events-none opacity-10 z-30"></div>
-          </div>
-        </section>
+          </motion.div>
+        </AnimatePresence>
+      </section>
 
-        {/* Metronome Panel */}
+        {/* Annotation Tools Panel */}
+        <AnimatePresence>
+          {isAnnotationPanelOpen && showUI && (
+            <motion.div 
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -20, opacity: 0 }}
+              className="fixed top-24 left-1/2 -translate-x-1/2 z-[110] bg-surface-bright/95 backdrop-blur-2xl p-4 rounded-3xl shadow-2xl border border-outline-variant/10 flex items-center gap-4"
+            >
+              <div className="flex items-center gap-1 pr-4 border-r border-outline-variant/10">
+                <button 
+                  onClick={() => { setActiveTool('select'); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'select' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <MousePointer2 className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">选择</span>
+                </button>
+                <button 
+                  onClick={() => { setActiveTool('edit'); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'edit' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <Edit3 className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">画笔</span>
+                </button>
+                <button 
+                  onClick={() => { setActiveTool('highlight'); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'highlight' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <Highlighter className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">荧光笔</span>
+                </button>
+                <button 
+                  onClick={() => { setActiveTool('eraser'); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'eraser' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <Eraser className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">橡皮擦</span>
+                </button>
+                <button 
+                  onClick={() => { setActiveTool('text'); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'text' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <Type className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">文字</span>
+                </button>
+                <button 
+                  onClick={() => { setIsSymbolsPanelOpen(true); setIsAnnotationPanelOpen(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${activeTool === 'stamp' ? 'bg-secondary text-on-secondary shadow-md' : 'text-on-background/50 hover:bg-surface-container'}`}
+                >
+                  <PenTool className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">符号库</span>
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-2 pl-2">
+                {['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500'].map(color => (
+                  <button 
+                    key={color}
+                    onClick={() => setActiveColor(color)}
+                    className={`w-6 h-6 rounded-full border-2 transition-all ${activeColor === color ? 'border-primary scale-125' : 'border-transparent'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bluetooth Pedal Panel */}
+        <AnimatePresence>
+          {isBluetoothPanelOpen && showUI && (
+            <motion.div 
+              initial={{ x: 100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 100, opacity: 0 }}
+              className="fixed right-8 top-24 z-[110] bg-surface-bright/95 backdrop-blur-2xl p-6 rounded-3xl shadow-2xl border border-outline-variant/10 w-72"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-headline font-bold text-primary uppercase tracking-widest text-xs">蓝牙翻页器</h3>
+                <button onClick={() => setIsBluetoothPanelOpen(false)}><X className="w-4 h-4 text-on-background/30" /></button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between p-4 bg-surface-container rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <Radio className={`w-5 h-5 ${pedalConfig?.enabled ? 'text-primary animate-pulse' : 'text-on-background/30'}`} />
+                    <span className="text-sm font-bold">启用翻页器</span>
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      const next = { ...pedalConfig, enabled: !pedalConfig.enabled };
+                      setPedalConfig(next);
+                      await storageService.saveMetadata({ pedalConfig: next });
+                    }}
+                    className={`w-10 h-5 rounded-full transition-all relative ${pedalConfig?.enabled ? 'bg-primary' : 'bg-outline-variant'}`}
+                  >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${pedalConfig?.enabled ? 'right-1' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest px-2">按键配置</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-surface-container rounded-xl">
+                      <div className="text-[8px] font-bold text-on-background/30 uppercase mb-1">上一页</div>
+                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.prevPageKeys.join(', ')}</div>
+                    </div>
+                    <div className="p-3 bg-surface-container rounded-xl">
+                      <div className="text-[8px] font-bold text-on-background/30 uppercase mb-1">下一页</div>
+                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.nextPageKeys.join(', ')}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                  <p className="text-[10px] text-primary/70 leading-relaxed italic">
+                    提示：请确保您的蓝牙翻页器已连接到设备，并处于键盘模式。
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {isMetronomeOpen && showUI && (
             <motion.div 
@@ -1107,137 +1337,281 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           )}
         </AnimatePresence>
 
-        {/* Floating Toolbar */}
-        <div className={`fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 transition-all duration-500 ${isToolbarOpen && !isFullscreen && showUI ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}>
-          <div className="bg-surface-bright/90 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col gap-2">
-            <button 
-              onClick={() => setActiveTool('select')}
-              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${
-                activeTool === 'select' ? 'bg-primary text-on-primary shadow-lg' : 'text-on-background/50 hover:bg-surface-container-high'
-              }`}
-              title="选择与移动"
+        {/* Quick Controls Integrated into Display Panel */}
+        <AnimatePresence>
+          {isDisplayMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="fixed top-24 right-8 w-80 bg-surface-bright/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-outline-variant/10 p-8 z-[130] space-y-8"
             >
-              <MousePointer2 className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => setActiveTool('edit')}
-              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${
-                activeTool === 'edit' ? 'bg-primary text-on-primary shadow-lg' : 'text-on-background/50 hover:bg-surface-container-high'
-              }`}
-              title="画笔"
-            >
-              <Edit3 className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => setActiveTool('highlight')}
-              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${
-                activeTool === 'highlight' ? 'bg-primary text-on-primary shadow-lg' : 'text-on-background/50 hover:bg-surface-container-high'
-              }`}
-              title="荧光笔"
-            >
-              <Highlighter className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => setActiveTool('text')}
-              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${
-                activeTool === 'text' ? 'bg-primary text-on-primary shadow-lg' : 'text-on-background/50 hover:bg-surface-container-high'
-              }`}
-              title="文本笔记"
-            >
-              <Type className="w-6 h-6" />
-            </button>
-            <div className="h-px bg-outline-variant/20 mx-2 my-1"></div>
-            <button 
-              onClick={() => canvasRef.current?.undo()}
-              className="w-12 h-12 flex items-center justify-center rounded-xl text-on-background/50 hover:bg-surface-container-high transition-all"
-              title="撤销"
-            >
-              <Undo className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => {
-                canvasRef.current?.clear();
-                setPlacedObjects([]);
-              }}
-              className="w-12 h-12 flex items-center justify-center rounded-xl text-on-background/50 hover:bg-surface-container-high transition-all"
-              title="清空"
-            >
-              <Trash2 className="w-6 h-6" />
-            </button>
-          </div>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest">显示与进度</h3>
+                <button onClick={() => setIsDisplayMenuOpen(false)}><X className="w-4 h-4 text-on-background/30" /></button>
+              </div>
 
-          <div className="bg-surface-bright/90 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col gap-2">
-            {['#000000', '#D32F2F', '#1976D2', '#388E3C'].map(color => (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">跳转页面</span>
+                  <span className="text-xs font-bold text-primary">{pageNumber} / {numPages}</span>
+                </div>
+                <input 
+                  type="range" min="1" max={numPages || 1} value={pageNumber}
+                  onChange={(e) => setPageNumber(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">阅读模式</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['normal', 'sepia', 'night'] as const).map(mode => (
+                    <button 
+                      key={mode}
+                      onClick={() => setReadingMode(mode)}
+                      className={`py-2 rounded-xl text-[10px] font-bold uppercase tracking-tighter transition-all ${readingMode === mode ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container text-on-background/50 hover:bg-surface-container-high'}`}
+                    >
+                      {mode === 'normal' ? '标准' : mode === 'sepia' ? '护眼' : '夜间'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Maximize2 className="w-3 h-3 text-on-background/30" />
+                      <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">缩放比例</span>
+                    </div>
+                    <span className="text-xs font-bold text-secondary">{Math.round(zoom * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0.5" max="2" step="0.1" value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-surface-container rounded-full appearance-none cursor-pointer accent-secondary"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Battery className="w-3 h-3 text-on-background/30" />
+                      <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">亮度调节</span>
+                    </div>
+                    <span className="text-xs font-bold text-tertiary">{Math.round(brightness * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0.5" max="1.5" step="0.1" value={brightness}
+                    onChange={(e) => setBrightness(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-surface-container rounded-full appearance-none cursor-pointer accent-tertiary"
+                  />
+                </div>
+              </div>
+
               <button 
-                key={color}
-                onClick={() => setActiveColor(color)}
-                className={`w-10 h-10 rounded-full border-2 transition-all ${
-                  activeColor === color ? 'border-primary scale-110 shadow-md' : 'border-transparent'
-                }`}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-            <button 
-              onClick={() => setIsSymbolsPanelOpen(!isSymbolsPanelOpen)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                isSymbolsPanelOpen ? 'bg-primary text-on-primary shadow-lg' : 'bg-surface-container text-on-background/50 hover:bg-surface-container-high'
-              }`}
-              title="音乐术语与指法"
-            >
-              <Settings2 className="w-5 h-5" />
-            </button>
-          </div>
+                onClick={() => setIsTwoPageView(!isTwoPageView)}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${isTwoPageView ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-surface-container text-on-background/50 border border-transparent'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Grid className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-widest">双页显示模式</span>
+                </div>
+                <div className={`w-10 h-5 rounded-full relative transition-all ${isTwoPageView ? 'bg-primary' : 'bg-on-background/10'}`}>
+                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${isTwoPageView ? 'right-1' : 'left-1'}`} />
+                </div>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Symbols & Fingerings Panel */}
+
+        {/* Metronome Panel */}
+        <AnimatePresence>
+          {isMetronomeOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="fixed top-24 right-8 w-80 bg-surface-bright/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-outline-variant/10 p-8 z-[110] space-y-8"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest">节拍器</h3>
+                <button onClick={() => setIsMetronomeOpen(false)}><X className="w-4 h-4 text-on-background/30" /></button>
+              </div>
+
+              <div className="flex flex-col items-center gap-6">
+                <div className="relative">
+                  <div className="text-6xl font-headline font-bold text-primary tracking-tighter">{bpm}</div>
+                  <div className="text-[10px] font-bold text-primary/40 uppercase absolute -right-8 bottom-2">BPM</div>
+                  {isMetronomePlaying && (
+                    <motion.div 
+                      animate={{ scale: pulse ? 1.5 : 1, opacity: pulse ? 1 : 0.2 }}
+                      className="absolute -top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-secondary rounded-full shadow-[0_0_10px_rgba(255,137,137,0.5)]"
+                    />
+                  )}
+                </div>
+
+                <input 
+                  type="range" min="40" max="240" value={bpm}
+                  onChange={(e) => setBpm(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary"
+                />
+
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => setIsMetronomePlaying(!isMetronomePlaying)}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all active:scale-95 ${isMetronomePlaying ? 'bg-secondary text-on-secondary shadow-lg' : 'bg-surface-container text-secondary'}`}
+                  >
+                    {isMetronomePlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isMetronomePlaying ? '停止' : '开始'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const now = Date.now();
+                      if (saveTimeoutRef.current) {
+                        const diff = now - (saveTimeoutRef.current as any);
+                        const newBpm = Math.round(60000 / diff);
+                        if (newBpm > 30 && newBpm < 300) setBpm(newBpm);
+                      }
+                      (saveTimeoutRef.current as any) = now;
+                    }}
+                    className="bg-surface-container text-primary py-3 rounded-xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all"
+                  >
+                    手动打拍
+                  </button>
+                </div>
+
+                {isAdmin && (
+                  <button 
+                    onClick={pushMetronome}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${
+                      isSyncing ? 'bg-tertiary text-on-tertiary shadow-lg' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                    }`}
+                  >
+                    <Radio className={`w-4 h-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+                    推送同步节拍
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Parts Menu Panel */}
+        <AnimatePresence>
+          {isPartsMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="fixed top-24 right-8 w-64 bg-surface-bright/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-outline-variant/10 py-4 z-[110]"
+            >
+              <div className="px-6 py-2 mb-2 border-b border-outline-variant/10">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest">声部选择</h3>
+              </div>
+              <button 
+                onClick={() => { handlePartChange(-1); setIsPartsMenuOpen(false); }}
+                className={`w-full text-left px-6 py-4 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === -1 ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
+              >
+                总谱 (Full Score)
+              </button>
+              {scoreData?.parts.map((part, idx) => (
+                <button 
+                  key={part.id}
+                  onClick={() => { handlePartChange(idx); setIsPartsMenuOpen(false); }}
+                  className={`w-full text-left px-6 py-4 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === idx ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
+                >
+                  {part.name}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Symbols & Fingerings Panel */}
+        <AnimatePresence>
           {isSymbolsPanelOpen && (
-            <div className="absolute right-16 top-0 w-48 bg-surface-bright/95 backdrop-blur-2xl p-4 rounded-3xl shadow-2xl border border-outline-variant/10 animate-in fade-in slide-in-from-right-4 duration-300 z-[70]">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-[10px] font-bold text-primary uppercase tracking-widest">音乐术语</h3>
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="fixed top-24 left-1/2 -translate-x-1/2 w-[480px] bg-surface-bright/95 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl border border-outline-variant/10 z-[110]"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest">音乐术语与指法库</h3>
                 <button onClick={() => setIsSymbolsPanelOpen(false)}>
-                  <X className="w-3 h-3 text-on-background/30" />
+                  <X className="w-4 h-4 text-on-background/30" />
                 </button>
               </div>
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                {musicSymbols.map(symbol => (
-                  <button
-                    key={symbol}
-                    onClick={() => {
-                      setActiveTool('stamp');
-                      setSelectedStamp({ type: 'symbol', content: symbol });
-                    }}
-                    className={`h-8 flex items-center justify-center rounded-lg text-sm font-serif transition-all ${
-                      selectedStamp?.content === symbol && activeTool === 'stamp'
-                        ? 'bg-primary text-on-primary shadow-md scale-110'
-                        : 'bg-surface-container-low text-on-background/70 hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  >
-                    {symbol}
-                  </button>
-                ))}
-              </div>
 
-              <h3 className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3">指法</h3>
-              <div className="grid grid-cols-5 gap-2">
-                {fingerings.map(num => (
-                  <button
-                    key={num}
-                    onClick={() => {
-                      setActiveTool('stamp');
-                      setSelectedStamp({ type: 'fingering', content: num });
-                    }}
-                    className={`h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${
-                      selectedStamp?.content === num && activeTool === 'stamp'
-                        ? 'bg-secondary text-on-secondary shadow-md scale-110'
-                        : 'bg-surface-container-low text-on-background/70 hover:bg-secondary/10 hover:text-secondary'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <h4 className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest mb-4">力度与表情</h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {musicSymbols.map(symbol => (
+                      <button
+                        key={symbol}
+                        onClick={() => {
+                          setActiveTool('stamp');
+                          setSelectedStamp({ type: 'symbol', content: symbol });
+                          setIsSymbolsPanelOpen(false);
+                        }}
+                        className={`h-10 flex items-center justify-center rounded-xl text-lg font-serif transition-all ${
+                          selectedStamp?.content === symbol && activeTool === 'stamp'
+                            ? 'bg-primary text-on-primary shadow-md scale-110'
+                            : 'bg-surface-container text-on-background/70 hover:bg-primary/10 hover:text-primary'
+                        }`}
+                      >
+                        {symbol}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest mb-4">指法标记</h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {fingerings.map(num => (
+                      <button
+                        key={num}
+                        onClick={() => {
+                          setActiveTool('stamp');
+                          setSelectedStamp({ type: 'fingering', content: num });
+                          setIsSymbolsPanelOpen(false);
+                        }}
+                        className={`h-10 flex items-center justify-center rounded-xl font-bold transition-all ${
+                          selectedStamp?.content === num && activeTool === 'stamp'
+                            ? 'bg-primary text-on-primary shadow-md scale-110'
+                            : 'bg-surface-container text-on-background/70 hover:bg-primary/10 hover:text-primary'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-8 pt-6 border-t border-outline-variant/10">
+                    <h4 className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest mb-4">颜色选择</h4>
+                    <div className="flex gap-3">
+                      {['#000000', '#D32F2F', '#1976D2', '#388E3C'].map(color => (
+                        <button 
+                          key={color}
+                          onClick={() => setActiveColor(color)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all ${
+                            activeColor === color ? 'border-primary scale-110 shadow-md' : 'border-transparent'
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
 
         {isFullscreen && (
           <div className="fixed top-6 left-6 z-[60] flex gap-2">
@@ -1273,7 +1647,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           <div className="bg-surface-bright/90 backdrop-blur-xl px-6 py-3 rounded-full shadow-2xl border border-outline-variant/10 flex items-center gap-6">
             <button 
               disabled={pageNumber <= 1}
-              onClick={() => setPageNumber(prev => prev - 1)}
+              onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
               className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
             >
               <ChevronLeft className="w-6 h-6" />
@@ -1289,7 +1663,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
             </div>
             <button 
               disabled={pageNumber >= numPages}
-              onClick={() => setPageNumber(prev => prev + 1)}
+              onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
               className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
             >
               <ChevronRight className="w-6 h-6" />
@@ -1322,6 +1696,42 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
                 />
               </div>
               <Volume2 className="w-5 h-5 text-on-background/40" />
+            </div>
+          </div>
+        )}
+
+        {/* Bluetooth Pedal Control Module */}
+        {pedalConfig?.enabled && (
+          <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 ${showUI ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+            <div className="bg-surface-bright/90 backdrop-blur-xl p-4 rounded-3xl shadow-2xl border border-outline-variant/10 flex flex-col gap-3 min-w-[160px]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-primary animate-pulse" />
+                  <span className="text-[10px] font-bold text-on-background/60 uppercase tracking-widest">蓝牙踏板</span>
+                </div>
+                <div className="w-2 h-2 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]"></div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                  className="flex flex-col items-center gap-1 p-3 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
+                >
+                  <ChevronLeft className="w-5 h-5 text-primary group-active:-translate-x-1 transition-transform" />
+                  <span className="text-[8px] font-bold text-on-background/40 uppercase">上一页</span>
+                </button>
+                <button 
+                  onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
+                  className="flex flex-col items-center gap-1 p-3 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
+                >
+                  <ChevronRight className="w-5 h-5 text-primary group-active:translate-x-1 transition-transform" />
+                  <span className="text-[8px] font-bold text-on-background/40 uppercase">下一页</span>
+                </button>
+              </div>
+              
+              <div className="text-[9px] text-center text-on-background/30 font-medium">
+                已绑定 {pedalConfig.nextPageKeys.length + pedalConfig.prevPageKeys.length} 个按键
+              </div>
             </div>
           </div>
         )}

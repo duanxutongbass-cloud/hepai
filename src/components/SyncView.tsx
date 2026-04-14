@@ -1,4 +1,4 @@
-import { Menu, RefreshCw, Radio, CheckCircle, Filter, SortAsc, Piano, Music, Download, BatteryWarning, BatteryLow, Activity, X, Play, Pause, Search, Clock, Settings, LogOut, Heart, User, ShieldAlert, Lock, VolumeX, UserCheck, UserX, Users, Send, MessageSquare, Copy, PlusCircle, ChevronDown, ChevronUp, Edit3, Trash2, MoreHorizontal, Bell, Shield } from 'lucide-react';
+import { Menu, RefreshCw, Radio, CheckCircle, Filter, SortAsc, Piano, Music, Download, BatteryWarning, BatteryLow, Activity, X, Play, Pause, Search, Clock, Settings, LogOut, Heart, User, ShieldAlert, Lock, VolumeX, UserCheck, UserX, Users, Send, MessageSquare, Copy, PlusCircle, ChevronDown, ChevronUp, Edit3, Trash2, MoreHorizontal, Bell, Shield, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService, RoleChangeRequest, GroupInfo, ChatMessage, UserRole } from '../services/storageService';
@@ -20,6 +20,12 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [message, setMessage] = useState<{ text: string, type: 'info' | 'error' } | null>(null);
+
+  const showMessage = (text: string, type: 'info' | 'error' = 'info') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [roleRequests, setRoleRequests] = useState<RoleChangeRequest[]>([]);
   
@@ -39,6 +45,8 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
   const [isConnectedMembersFolded, setIsConnectedMembersFolded] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<{ [groupId: string]: number }>({});
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
+  const [isTargetedPushFolded, setIsTargetedPushFolded] = useState(false);
+  const [isRoleRequestsFolded, setIsRoleRequestsFolded] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editGroupName, setEditGroupName] = useState('');
   
@@ -277,12 +285,12 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
   }, []);
 
   const members = [
-    { name: '张小明', role: '钢琴 / 第一部', battery: 85, progress: 100, status: 'normal' },
-    { name: '李华', role: '小提琴 / 首席', battery: 12, progress: 100, status: 'low-battery' },
-    { name: '王大力', role: '大提琴', battery: 92, progress: 64, status: 'downloading' },
-    { name: '陈静', role: '长笛', battery: 55, progress: 100, status: 'normal' },
-    { name: '周杰', role: '打击乐', battery: 4, progress: 100, status: 'critical-battery' },
-    { name: '赵雷', role: '调音师', battery: 100, progress: 100, status: 'normal' },
+    { name: '张小明', role: '钢琴 / 第一部', battery: 85, progress: 100, status: 'normal', currentPage: 12, latency: 15 },
+    { name: '李华', role: '小提琴 / 首席', battery: 12, progress: 100, status: 'low-battery', currentPage: 12, latency: 18 },
+    { name: '王大力', role: '大提琴', battery: 92, progress: 64, status: 'downloading', currentPage: 8, latency: 45 },
+    { name: '陈静', role: '长笛', battery: 55, progress: 100, status: 'normal', currentPage: 12, latency: 12 },
+    { name: '周杰', role: '打击乐', battery: 4, progress: 100, status: 'critical-battery', currentPage: 12, latency: 22 },
+    { name: '赵雷', role: '调音师', battery: 100, progress: 100, status: 'normal', currentPage: 1, latency: 10 },
   ];
 
   const handleManualTap = () => {
@@ -670,6 +678,57 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
               </button>
             </div>
 
+            <div className="md:col-span-8 bg-surface-container-high rounded-2xl p-8 flex flex-col justify-between relative overflow-hidden group border border-outline-variant/10 shadow-lg">
+              <div 
+                onClick={() => setIsTargetedPushFolded(!isTargetedPushFolded)}
+                className="absolute top-4 right-4 z-20 p-2 hover:bg-surface-container rounded-lg cursor-pointer transition-colors"
+              >
+                {isTargetedPushFolded ? <ChevronDown className="w-5 h-5 text-on-background/30" /> : <ChevronUp className="w-5 h-5 text-on-background/30" />}
+              </div>
+              
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Music className="w-32 h-32" />
+              </div>
+              
+              <div className="relative z-10">
+                <h2 className="font-headline font-bold text-2xl tracking-tight text-on-background mb-2">定向批注推送</h2>
+                
+                <AnimatePresence>
+                  {!isTargetedPushFolded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <p className="text-on-background/50 font-body mb-6 max-w-sm">选择特定声部，将您的排练批注精准推送给对应成员。</p>
+                      
+                      <div className="flex flex-wrap gap-2 mb-8">
+                        {['全部', '弦乐组', '木管组', '铜管组', '打击乐'].map(group => (
+                          <button 
+                            key={group}
+                            className="px-4 py-2 bg-background border border-outline-variant/10 rounded-xl text-xs font-bold text-on-background/60 hover:border-primary hover:text-primary transition-all"
+                          >
+                            {group}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          showMessage('定向批注已推送至 弦乐组', 'info');
+                        }}
+                        className="w-fit flex items-center gap-3 px-8 py-4 bg-tertiary text-on-tertiary rounded-full font-bold text-md uppercase tracking-widest shadow-xl active:scale-95 transition-all hover:bg-tertiary/80"
+                      >
+                        <Send className="w-5 h-5" />
+                        推送至选定声部
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
             <div className="md:col-span-4 flex flex-col gap-6">
               <div className="bg-surface-container-high rounded-2xl p-8 flex-1 flex flex-col items-center justify-center text-center border border-outline-variant/10 shadow-lg relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-tertiary" />
@@ -1033,34 +1092,52 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
 
         {isAdmin && roleRequests.length > 0 && (
           <section className="space-y-6">
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="text-secondary w-6 h-6" />
-              <h2 className="text-2xl font-headline font-bold text-on-background tracking-tight">声部变更申请</h2>
+            <div 
+              onClick={() => setIsRoleRequestsFolded(!isRoleRequestsFolded)}
+              className="flex items-center justify-between cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="text-secondary w-6 h-6" />
+                <h2 className="text-2xl font-headline font-bold text-on-background tracking-tight">声部变更申请</h2>
+              </div>
+              <div className="p-1 hover:bg-surface-container rounded transition-colors">
+                {isRoleRequestsFolded ? <ChevronDown className="w-5 h-5 text-on-background/30" /> : <ChevronUp className="w-5 h-5 text-on-background/30" />}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {roleRequests.filter(r => r.status === 'pending').map(request => (
-                <div key={request.id} className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 flex items-center justify-between">
-                  <div>
-                    <div className="text-lg font-bold text-on-background">{request.userName}</div>
-                    <div className="text-sm text-on-background/50">申请变更为: <span className="text-primary font-bold">{request.requestedRole}</span></div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleApproveRole(request.id)}
-                      className="p-3 bg-tertiary/10 text-tertiary rounded-xl hover:bg-tertiary hover:text-on-tertiary transition-all"
-                    >
-                      <UserCheck className="w-5 h-5" />
-                    </button>
-                    <button 
-                      onClick={() => handleRejectRole(request.id)}
-                      className="p-3 bg-error/10 text-error rounded-xl hover:bg-error hover:text-on-error transition-all"
-                    >
-                      <UserX className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            
+            <AnimatePresence>
+              {!isRoleRequestsFolded && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden"
+                >
+                  {roleRequests.filter(r => r.status === 'pending').map(request => (
+                    <div key={request.id} className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 flex items-center justify-between">
+                      <div>
+                        <div className="text-lg font-bold text-on-background">{request.userName}</div>
+                        <div className="text-sm text-on-background/50">申请变更为: <span className="text-primary font-bold">{request.requestedRole}</span></div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleApproveRole(request.id); }}
+                          className="p-3 bg-tertiary/10 text-tertiary rounded-xl hover:bg-tertiary hover:text-on-tertiary transition-all"
+                        >
+                          <UserCheck className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleRejectRole(request.id); }}
+                          className="p-3 bg-error/10 text-error rounded-xl hover:bg-error hover:text-on-error transition-all"
+                        >
+                          <UserX className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         )}
 
@@ -1136,20 +1213,42 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                         <div className="text-[10px] uppercase font-bold tracking-tighter text-on-background/30">电池电量</div>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-medium text-on-background/50 mb-1">
-                        <span className="flex items-center gap-1">
-                          {member.status === 'downloading' && <Download className="w-3 h-3 animate-bounce" />}
-                          乐谱同步进度
-                        </span>
-                        <span>{member.progress}%</span>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-[10px] font-bold text-on-background/40 uppercase tracking-widest">
+                        <span>当前页码: 第 {member.currentPage} 页</span>
+                        <span>延迟: {member.latency}ms</span>
                       </div>
-                      <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all duration-500 ${member.status === 'downloading' ? 'bg-primary' : 'bg-tertiary'}`}
-                          style={{ width: `${member.progress}%` }}
-                        ></div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs font-medium text-on-background/50 mb-1">
+                          <span className="flex items-center gap-1">
+                            {member.status === 'downloading' && <Download className="w-3 h-3 animate-bounce" />}
+                            乐谱同步进度
+                          </span>
+                          <span>{member.progress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-500 ${member.status === 'downloading' ? 'bg-primary' : 'bg-tertiary'}`}
+                            style={{ width: `${member.progress}%` }}
+                          ></div>
+                        </div>
                       </div>
+                      {isAdmin && (
+                        <div className="pt-2 flex gap-2">
+                          <button 
+                            onClick={() => {
+                              showMessage(`已向 ${member.name} 推送批注`, 'info');
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-all"
+                          >
+                            <Send className="w-3 h-3" />
+                            推送批注
+                          </button>
+                          <button className="p-2 bg-surface-container rounded-lg text-on-background/30 hover:text-primary transition-colors">
+                            <Settings className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1158,6 +1257,23 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
           </AnimatePresence>
         </section>
       </main>
+
+      {/* Message Toast */}
+      <AnimatePresence>
+        {message && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${
+              message.type === 'error' ? 'bg-error/90 text-on-error border-error' : 'bg-primary/90 text-on-primary border-primary'
+            }`}
+          >
+            {message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+            <span className="font-bold text-sm">{message.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

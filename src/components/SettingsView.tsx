@@ -1,4 +1,4 @@
-import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown } from 'lucide-react';
+import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown, Radio } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService, Setlist } from '../services/storageService';
@@ -22,6 +22,8 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isShowingNotifications, setIsShowingNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [pedalConfig, setPedalConfig] = useState<any>({ nextPageKeys: ['ArrowRight', 'PageDown'], prevPageKeys: ['ArrowLeft', 'PageUp'], enabled: true });
+  const [isRecordingKey, setIsRecordingKey] = useState<'next' | 'prev' | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -29,9 +31,53 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
       setUserProfile(meta.profile);
       setSetlists(meta.setlists || []);
       setNotifications(meta.notifications || []);
+      if (meta.pedalConfig) setPedalConfig(meta.pedalConfig);
     };
     loadData();
   }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (isRecordingKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const updated = { ...pedalConfig };
+        if (isRecordingKey === 'next') {
+          if (!updated.nextPageKeys.includes(e.key)) {
+            updated.nextPageKeys = [...updated.nextPageKeys, e.key];
+          }
+        } else {
+          if (!updated.prevPageKeys.includes(e.key)) {
+            updated.prevPageKeys = [...updated.prevPageKeys, e.key];
+          }
+        }
+        setPedalConfig(updated);
+        storageService.saveMetadata({ pedalConfig: updated });
+        setIsRecordingKey(null);
+        showMessage('按键录制成功');
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [isRecordingKey, pedalConfig]);
+
+  const removeKey = (type: 'next' | 'prev', key: string) => {
+    const updated = { ...pedalConfig };
+    if (type === 'next') {
+      updated.nextPageKeys = updated.nextPageKeys.filter(k => k !== key);
+    } else {
+      updated.prevPageKeys = updated.prevPageKeys.filter(k => k !== key);
+    }
+    setPedalConfig(updated);
+    storageService.saveMetadata({ pedalConfig: updated });
+  };
+
+  const togglePedal = () => {
+    const updated = { ...pedalConfig, enabled: !pedalConfig.enabled };
+    setPedalConfig(updated);
+    storageService.saveMetadata({ pedalConfig: updated });
+  };
 
   const markAllAsRead = async () => {
     const updated = notifications.map(n => ({ ...n, read: true }));
@@ -143,7 +189,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
             className="flex items-center gap-3 pl-4 border-l border-outline-variant/10 cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:bg-primary group-hover:text-on-primary transition-all overflow-hidden">
-              {userProfile?.avatar ? (
+              {userProfile?.avatar instanceof Blob ? (
                 <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 (userProfile?.name || '音')[0]
@@ -163,7 +209,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="relative">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl sm:text-3xl border-2 border-primary/20 shadow-inner overflow-hidden">
-                  {userProfile?.avatar ? (
+                  {userProfile?.avatar instanceof Blob ? (
                     <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     (userProfile?.name || '音')[0]
@@ -313,6 +359,74 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
               <p className="text-xs text-on-background/40 leading-relaxed">
                 {isAdmin ? '您当前拥有完整管理权限，可上传、编辑及管理成员。' : '您当前处于成员模式，仅限查看及使用乐谱。'}
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Bluetooth Pedal */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Radio className="text-primary w-5 h-5" />
+            <h2 className="font-headline font-bold text-xl tracking-tight">蓝牙踏板翻页</h2>
+          </div>
+          <div className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-on-background">启用踏板翻页</p>
+                <p className="text-xs text-on-background/50">支持蓝牙键盘、翻页笔、踏板等 HID 设备</p>
+              </div>
+              <button 
+                onClick={togglePedal}
+                className={`w-12 h-6 rounded-full transition-all relative ${pedalConfig.enabled ? 'bg-primary' : 'bg-outline-variant'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pedalConfig.enabled ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-on-background/50 uppercase tracking-widest">下一页按键</span>
+                  <button 
+                    onClick={() => setIsRecordingKey('next')}
+                    className={`text-[10px] font-bold px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-all ${isRecordingKey === 'next' ? 'animate-pulse bg-primary text-on-primary' : ''}`}
+                  >
+                    {isRecordingKey === 'next' ? '请按下按键...' : '+ 录制新按键'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pedalConfig.nextPageKeys.map((key: string) => (
+                    <div key={key} className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-lg border border-outline-variant/10 group">
+                      <span className="text-xs font-mono font-bold text-primary">{key}</span>
+                      <button onClick={() => removeKey('next', key)} className="text-on-background/20 hover:text-error transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-on-background/50 uppercase tracking-widest">上一页按键</span>
+                  <button 
+                    onClick={() => setIsRecordingKey('prev')}
+                    className={`text-[10px] font-bold px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-all ${isRecordingKey === 'prev' ? 'animate-pulse bg-primary text-on-primary' : ''}`}
+                  >
+                    {isRecordingKey === 'prev' ? '请按下按键...' : '+ 录制新按键'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pedalConfig.prevPageKeys.map((key: string) => (
+                    <div key={key} className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-lg border border-outline-variant/10 group">
+                      <span className="text-xs font-mono font-bold text-primary">{key}</span>
+                      <button onClick={() => removeKey('prev', key)} className="text-on-background/20 hover:text-error transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>

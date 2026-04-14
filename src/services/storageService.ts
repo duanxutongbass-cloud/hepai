@@ -105,6 +105,19 @@ export interface UserProfile {
   avatar?: Blob;
 }
 
+export interface PedalConfig {
+  nextPageKeys: string[];
+  prevPageKeys: string[];
+  enabled: boolean;
+}
+
+export interface ReaderSettings {
+  mode: 'normal' | 'sepia' | 'night';
+  brightness: number;
+  zoom: number;
+  isTwoPageView: boolean;
+}
+
 export interface AppMetadata {
   roles: string[];
   partTags: string[];
@@ -122,6 +135,8 @@ export interface AppMetadata {
   chatHistory?: { [groupId: string]: ChatMessage[] };
   userRole?: UserRole;
   profile?: UserProfile;
+  pedalConfig?: PedalConfig;
+  readerSettings?: ReaderSettings;
 }
 
 export interface Notification {
@@ -190,7 +205,9 @@ export const storageService = {
     const chatHistory = await db.get(META_STORE, 'chatHistory') || {};
     const userRole = await db.get(META_STORE, 'userRole') || 'member';
     const profile = await db.get(META_STORE, 'profile') || { name: '音乐家', email: 'musician@example.com', instruments: ['钢琴', '小提琴'], orchestra: '爱乐交响乐团' };
-    return { roles, partTags, folders, program, setlists, activeSetlistId, syncState, roleRequests, groups, activeGroupId, chatHistory, userRole, profile };
+    const pedalConfig = await db.get(META_STORE, 'pedalConfig') || { nextPageKeys: ['ArrowRight', 'PageDown'], prevPageKeys: ['ArrowLeft', 'PageUp'], enabled: true };
+    const readerSettings = await db.get(META_STORE, 'readerSettings') || { mode: 'normal', brightness: 1, zoom: 1, isTwoPageView: false };
+    return { roles, partTags, folders, program, setlists, activeSetlistId, syncState, roleRequests, groups, activeGroupId, chatHistory, userRole, profile, pedalConfig, readerSettings };
   },
 
   async saveMetadata(meta: Partial<AppMetadata>) {
@@ -208,5 +225,7 @@ export const storageService = {
     if (meta.chatHistory) await db.put(META_STORE, meta.chatHistory, 'chatHistory');
     if (meta.userRole) await db.put(META_STORE, meta.userRole, 'userRole');
     if (meta.profile) await db.put(META_STORE, meta.profile, 'profile');
+    if (meta.pedalConfig) await db.put(META_STORE, meta.pedalConfig, 'pedalConfig');
+    if (meta.readerSettings) await db.put(META_STORE, meta.readerSettings, 'readerSettings');
   }
 };

@@ -98,11 +98,52 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
   const [confirmingRemoveFromProgramId, setConfirmingRemoveFromProgramId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string, type: 'info' | 'error' } | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedScoreIds, setSelectedScoreIds] = useState<Set<string>>(new Set());
+  const [isMovingToFolder, setIsMovingToFolder] = useState(false);
   const [userRole, setUserRole] = useState<string>('member');
 
   const showMessage = (text: string, type: 'info' | 'error' = 'info') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 3000);
+  };
+
+  const toggleScoreSelection = (scoreId: string) => {
+    const newSelected = new Set(selectedScoreIds);
+    if (newSelected.has(scoreId)) {
+      newSelected.delete(scoreId);
+    } else {
+      newSelected.add(scoreId);
+    }
+    setSelectedScoreIds(newSelected);
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedScoreIds.size === 0) return;
+    if (!window.confirm(`确定要删除选中的 ${selectedScoreIds.size} 份乐谱吗？`)) return;
+    
+    for (const id of selectedScoreIds) {
+      await storageService.deleteScore(id);
+    }
+    setScores(scores.filter(s => !selectedScoreIds.has(s.id)));
+    setSelectedScoreIds(new Set());
+    setIsMultiSelectMode(false);
+    showMessage('批量删除成功');
+  };
+
+  const handleBatchMove = async (folderName: string) => {
+    for (const id of selectedScoreIds) {
+      const score = scores.find(s => s.id === id);
+      if (score) {
+        await storageService.saveScore({ ...score, folder: folderName, updatedAt: Date.now() });
+      }
+    }
+    const updatedScores = await storageService.getAllScores();
+    setScores(updatedScores);
+    setSelectedScoreIds(new Set());
+    setIsMultiSelectMode(false);
+    setIsMovingToFolder(false);
+    showMessage('批量移动成功');
   };
 
   const instrumentCodes: { [key: string]: string } = {
@@ -249,6 +290,14 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
       setProgramIds(activeSet.program);
     } else {
       setProgramIds(meta.program || []);
+    }
+  };
+
+  const handleDeleteScore = async (scoreId: string) => {
+    if (window.confirm('确定要删除这个乐谱吗？此操作不可撤销。')) {
+      await storageService.deleteScore(scoreId);
+      await loadScores();
+      setActiveMenuId(null);
     }
   };
 
@@ -642,6 +691,95 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
 
   return (
     <div className="pb-24 min-h-screen bg-background">
+      {/* Batch Actions Bar */}
+      <AnimatePresence>
+        {isMultiSelectMode && selectedScoreIds.size > 0 && (
+          <motion.div 
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-2xl bg-surface-bright/90 backdrop-blur-xl border border-outline-variant/10 rounded-3xl shadow-2xl p-4 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold text-primary">已选择 {selectedScoreIds.size} 项</span>
+              <button 
+                onClick={() => setSelectedScoreIds(new Set(scores.map(s => s.id)))}
+                className="text-xs font-bold text-on-background/50 hover:text-primary transition-colors"
+              >
+                全选
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setIsMovingToFolder(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold hover:bg-primary/20 transition-all"
+              >
+                <FolderOpen className="w-4 h-4" />
+                移动到
+              </button>
+              <button 
+                onClick={handleBatchDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-error/10 text-error rounded-xl text-xs font-bold hover:bg-error/20 transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+                删除
+              </button>
+              <button 
+                onClick={() => { setIsMultiSelectMode(false); setSelectedScoreIds(new Set()); }}
+                className="p-2 text-on-background/50 hover:bg-surface-container rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Move to Folder Dialog */}
+      <AnimatePresence>
+        {isMovingToFolder && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsMovingToFolder(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-surface-bright w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-outline-variant/10 flex justify-between items-center">
+                <h3 className="text-lg font-bold">移动到文件夹</h3>
+                <button onClick={() => setIsMovingToFolder(false)}><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-4 max-h-[60vh] overflow-y-auto space-y-2">
+                <button 
+                  onClick={() => handleBatchMove('')}
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-surface-container transition-all text-left"
+                >
+                  <div className="w-10 h-10 bg-surface-container-low rounded-xl flex items-center justify-center text-primary">
+                    <Music className="w-5 h-5" />
+                  </div>
+                  <span className="font-bold">无文件夹 (根目录)</span>
+                </button>
+                {folders.map(folder => (
+                  <button 
+                    key={folder}
+                    onClick={() => handleBatchMove(folder)}
+                    className="w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-surface-container transition-all text-left"
+                  >
+                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                      <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <span className="font-bold">{folder}</span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar / Hamburger Menu */}
       <div className={`fixed inset-0 z-[100] transition-all duration-500 ${isSidebarOpen ? 'visible' : 'invisible'}`}>
         <div 
@@ -745,7 +883,19 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
 
       <header className="sticky top-0 z-50 flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 bg-background/80 backdrop-blur-md">
         <div className="flex items-center gap-3 sm:gap-4">
-          <Menu onClick={() => setIsSidebarOpen(true)} className="text-primary cursor-pointer w-5 h-5 sm:w-6 sm:h-6 hover:scale-110 transition-transform" />
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button 
+              onClick={() => {
+                setIsMultiSelectMode(!isMultiSelectMode);
+                setSelectedScoreIds(new Set());
+              }}
+              className={`p-2 rounded-xl transition-all ${isMultiSelectMode ? 'bg-primary text-on-primary' : 'text-primary hover:bg-surface-container-high'}`}
+              title="多选模式"
+            >
+              <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            <Menu onClick={() => setIsSidebarOpen(true)} className="text-primary cursor-pointer w-5 h-5 sm:w-6 sm:h-6 hover:scale-110 transition-transform" />
+          </div>
           <h1 className="font-headline font-bold text-base sm:text-lg tracking-tight text-primary uppercase">我的乐谱库</h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
@@ -1056,44 +1206,30 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                       {viewMode !== 'compact' && (
                         <div className="flex gap-1">
                           <button 
-                            onClick={(e) => { e.stopPropagation(); handleFolderToProgram(folder); }}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setEditingFolderName(folder);
+                              setTempFolderName(folder);
+                            }}
                             className="p-1 hover:bg-primary/10 rounded-full text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="添加到节目单"
+                            title="重命名"
                           >
-                            <Star className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4" />
                           </button>
-                          <div className="flex gap-1">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleFolderToProgram(folder); }}
-                              className="p-1 hover:bg-primary/10 rounded-full text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="添加到节目单"
-                            >
-                              <Star className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setEditingFolderName(folder);
-                                setTempFolderName(folder);
-                              }}
-                              className="p-1 hover:bg-primary/10 rounded-full text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={async (e) => { 
-                                e.stopPropagation(); 
-                                if (confirm(`确定要删除文件夹 "${folder}" 吗？文件夹内的乐谱不会被删除。`)) {
-                                  const next = folders.filter(f => f !== folder);
-                                  setFolders(next);
-                                  await storageService.saveMetadata({ folders: next });
-                                }
-                              }}
-                              className="p-1 hover:bg-error/10 rounded-full text-error opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <button 
+                            onClick={async (e) => { 
+                              e.stopPropagation(); 
+                              if (confirm(`确定要删除文件夹 "${folder}" 吗？文件夹内的乐谱不会被删除。`)) {
+                                const next = folders.filter(f => f !== folder);
+                                setFolders(next);
+                                await storageService.saveMetadata({ folders: next });
+                              }
+                            }}
+                            className="p-1 hover:bg-error/10 rounded-full text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="删除"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1170,7 +1306,12 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                         key={score.id}
                         className="bg-surface-container-high p-3 rounded-xl flex items-center justify-between group hover:bg-surface-bright transition-all cursor-pointer border border-outline-variant/5 hover:border-primary/20 shadow-sm"
                       >
-                        <div className="flex gap-4 items-center flex-1" onClick={() => handleOpenScore(score.id)}>
+                        <div className="flex gap-4 items-center flex-1" onClick={() => isMultiSelectMode ? toggleScoreSelection(score.id) : handleOpenScore(score.id)}>
+                          {isMultiSelectMode && (
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${selectedScoreIds.has(score.id) ? 'bg-primary border-primary' : 'border-outline-variant'}`}>
+                              {selectedScoreIds.has(score.id) && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+                          )}
                           <div className="w-10 h-12 bg-surface-container-low rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                             {score.coverBlob ? (
                               <img src={URL.createObjectURL(score.coverBlob)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -1194,9 +1335,18 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                           >
                             <MoreVertical className="w-4 h-4" />
                             {activeMenuId === score.id && (
-                              <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-xl shadow-2xl border border-outline-variant/10 py-2 z-[60] text-on-background">
-                                <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-surface-container"><Download className="w-4 h-4" /> 下载 PDF</button>
-                                <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-surface-container"><Music className="w-4 h-4" /> 查看声部</button>
+                              <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-3 z-[100] text-on-background animate-in fade-in zoom-in-95 duration-200">
+                                <div className="px-4 py-2 border-b border-outline-variant/5 mb-1">
+                                  <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest truncate">{score.title}</p>
+                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Download className="w-4 h-4" /> 下载 PDF</button>
+                                <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Music className="w-4 h-4" /> 查看声部</button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteScore(score.id); }} 
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-error hover:bg-error/10 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" /> 删除乐谱
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1205,29 +1355,47 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                     ) : (
                       <div 
                         key={score.id}
-                        onClick={() => handleOpenScore(score.id)}
-                        className={`bg-surface-container-high rounded-3xl group cursor-pointer border border-outline-variant/10 hover:border-primary/30 transition-all shadow-sm hover:shadow-xl flex flex-col ${viewMode === 'compact' ? 'rounded-2xl' : ''}`}
+                        onClick={() => isMultiSelectMode ? toggleScoreSelection(score.id) : handleOpenScore(score.id)}
+                        className={`bg-surface-container-high rounded-3xl group cursor-pointer border transition-all shadow-sm hover:shadow-xl flex flex-col ${
+                          selectedScoreIds.has(score.id) ? 'border-primary ring-2 ring-primary/20' : 'border-outline-variant/10 hover:border-primary/30'
+                        } ${viewMode === 'compact' ? 'rounded-2xl' : ''}`}
                       >
-                        <div className="aspect-[3/4] bg-surface-container-low relative overflow-hidden">
+                        <div className="aspect-[3/4] bg-surface-container-low relative">
+                          {isMultiSelectMode && (
+                            <div className="absolute top-2 left-2 z-40">
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedScoreIds.has(score.id) ? 'bg-primary border-primary' : 'bg-black/20 border-white'}`}>
+                                {selectedScoreIds.has(score.id) && <CheckCircle className="w-4 h-4 text-white" />}
+                              </div>
+                            </div>
+                          )}
                           {score.coverBlob ? (
-                            <img src={URL.createObjectURL(score.coverBlob)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                            <img src={URL.createObjectURL(score.coverBlob)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 rounded-t-3xl" referrerPolicy="no-referrer" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-primary/20">
                               <FileText className={viewMode === 'compact' ? 'w-10 h-10' : 'w-16 h-16'} />
                             </div>
                           )}
-                          <div className="absolute top-2 right-2">
+                          <div className="absolute top-2 right-2 z-50">
                             <div 
                               onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === score.id ? null : score.id); }}
-                              className="p-1.5 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity relative cursor-pointer"
+                              className={`p-2 bg-black/40 backdrop-blur-md rounded-full text-white transition-all relative cursor-pointer ${activeMenuId === score.id ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100 sm:opacity-0'}`}
                               role="button"
                               tabIndex={0}
                             >
-                              <MoreVertical className="w-3 h-3" />
+                              <MoreVertical className="w-4 h-4" />
                               {activeMenuId === score.id && (
-                                <div className="absolute right-0 top-full mt-2 w-40 bg-surface-bright rounded-xl shadow-2xl border border-outline-variant/10 py-2 z-[60] text-on-background">
-                                  <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] hover:bg-surface-container"><Download className="w-3 h-3" /> 下载</button>
-                                  <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] hover:bg-surface-container"><Music className="w-3 h-3" /> 声部</button>
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-3 z-[100] text-on-background animate-in fade-in zoom-in-95 duration-200">
+                                  <div className="px-4 py-2 border-b border-outline-variant/5 mb-1">
+                                    <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest truncate">{score.title}</p>
+                                  </div>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Download className="w-4 h-4" /> 下载 PDF</button>
+                                  <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Music className="w-4 h-4" /> 查看声部</button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteScore(score.id); }} 
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-error hover:bg-error/10 transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" /> 删除乐谱
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1294,7 +1462,7 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                   onClick={() => handleOpenScore(score.id)}
                   className="bg-surface-container-high rounded-3xl group cursor-pointer border border-outline-variant/10 hover:border-primary/30 transition-all shadow-sm hover:shadow-xl flex flex-col"
                 >
-                  <div className="aspect-[3/4] bg-surface-container-low relative overflow-hidden">
+                  <div className="aspect-[3/4] bg-surface-container-low relative">
                     {score.coverBlob ? (
                       <img src={URL.createObjectURL(score.coverBlob)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                     ) : (
@@ -1312,86 +1480,24 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                         </button>
                         <div 
                           onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === score.id ? null : score.id); }}
-                          className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/40 transition-all relative cursor-pointer"
+                          className={`p-2 bg-black/40 backdrop-blur-md rounded-full text-white transition-all relative cursor-pointer ${activeMenuId === score.id ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100 sm:opacity-0'}`}
                           role="button"
                           tabIndex={0}
                         >
                           <MoreVertical className="w-4 h-4" />
                           {activeMenuId === score.id && (
-                            <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-xl shadow-2xl border border-outline-variant/10 py-2 z-[60] animate-in fade-in zoom-in-95 duration-200 text-on-background">
+                            <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-3 z-[100] text-on-background animate-in fade-in zoom-in-95 duration-200">
+                              <div className="px-4 py-2 border-b border-outline-variant/5 mb-1">
+                                <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest truncate">{score.title}</p>
+                              </div>
+                              <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Download className="w-4 h-4" /> 下载 PDF</button>
+                              <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Music className="w-4 h-4" /> 查看声部</button>
                               <button 
-                                onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }}
-                                disabled={!score.allowDownload && !isAdmin}
-                                className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${(!score.allowDownload && !isAdmin) ? 'text-on-background/20 cursor-not-allowed' : 'text-on-background/70 hover:bg-surface-container'}`}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteScore(score.id); }} 
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-error hover:bg-error/10 transition-colors"
                               >
-                                <Download className="w-4 h-4" />
-                                <span>下载 PDF</span>
+                                <Trash2 className="w-4 h-4" /> 删除乐谱
                               </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }}
-                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-on-background/70 hover:bg-surface-container transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                                <span>编辑属性 / 录音</span>
-                              </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }}
-                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-on-background/70 hover:bg-surface-container transition-colors"
-                              >
-                                <Music className="w-4 h-4" />
-                                <span>查看声部</span>
-                              </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleAddToProgram(score); }}
-                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-on-background/70 hover:bg-surface-container transition-colors"
-                              >
-                                <Star className="w-4 h-4" />
-                                <span>添加到节目单</span>
-                              </button>
-                              {(isAdmin || score.uploaderId === 'MEMBER_MOCK') && (
-                                <div className="border-t border-outline-variant/10 mt-1 pt-1">
-                                  {confirmingDeleteScoreId === score.id ? (
-                                    <div className="flex items-center justify-between px-4 py-2 bg-error/10">
-                                      <span className="text-[10px] font-bold text-error uppercase">确定删除?</span>
-                                      <div className="flex gap-2">
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            storageService.deleteScore(score.id).then(() => {
-                                              loadScores();
-                                              setConfirmingDeleteScoreId(null);
-                                              setActiveMenuId(null);
-                                            });
-                                          }}
-                                          className="text-[10px] font-bold text-error hover:underline"
-                                        >
-                                          确认
-                                        </button>
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setConfirmingDeleteScoreId(null);
-                                          }}
-                                          className="text-on-background/30"
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setConfirmingDeleteScoreId(score.id);
-                                      }}
-                                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-error hover:bg-error/5 transition-colors"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                      <span>删除乐谱</span>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>
@@ -1428,7 +1534,7 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                   onClick={() => handleOpenScore(score.id)}
                   className="bg-surface-container-high rounded-2xl group cursor-pointer border border-outline-variant/10 hover:border-primary/30 transition-all shadow-sm hover:shadow-lg flex flex-col"
                 >
-                  <div className="aspect-[3/4] bg-surface-container-low relative overflow-hidden">
+                  <div className="aspect-[3/4] bg-surface-container-low relative">
                     {score.coverBlob ? (
                       <img src={URL.createObjectURL(score.coverBlob)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                     ) : (
@@ -1439,15 +1545,24 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                     <div className="absolute top-2 right-2">
                        <div 
                         onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === score.id ? null : score.id); }}
-                        className="p-1.5 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity relative cursor-pointer"
+                        className={`p-1.5 bg-black/40 backdrop-blur-md rounded-full text-white transition-all relative cursor-pointer ${activeMenuId === score.id ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100 sm:opacity-0'}`}
                         role="button"
                         tabIndex={0}
                       >
                         <MoreVertical className="w-3 h-3" />
                         {activeMenuId === score.id && (
-                          <div className="absolute right-0 top-full mt-2 w-40 bg-surface-bright rounded-xl shadow-2xl border border-outline-variant/10 py-2 z-[60] text-on-background">
-                            <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] hover:bg-surface-container"><Download className="w-3 h-3" /> 下载</button>
-                            <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] hover:bg-surface-container"><Music className="w-3 h-3" /> 声部</button>
+                          <div className="absolute right-0 top-full mt-2 w-48 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-3 z-[100] text-on-background animate-in fade-in zoom-in-95 duration-200">
+                            <div className="px-4 py-2 border-b border-outline-variant/5 mb-1">
+                              <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest truncate">{score.title}</p>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Download className="w-4 h-4" /> 下载 PDF</button>
+                            <button onClick={(e) => { e.stopPropagation(); setIsEditingScore(score); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"><Music className="w-4 h-4" /> 查看声部</button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteScore(score.id); }} 
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-error hover:bg-error/10 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" /> 删除乐谱
+                            </button>
                           </div>
                         )}
                       </div>
