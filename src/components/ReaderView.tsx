@@ -722,81 +722,83 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           </div>
         )}
       </AnimatePresence>
-      <header className={`bg-background flex justify-between items-center w-full px-6 py-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="text-primary hover:bg-surface-container-high p-2 rounded-xl transition-all">
-            <ChevronLeft className="w-6 h-6" />
+      <header className={`bg-background flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button onClick={onBack} className="text-primary hover:bg-surface-container-high p-1.5 sm:p-2 rounded-xl transition-all">
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
-          <h1 className="text-xl font-bold text-primary tracking-widest uppercase font-headline">合拍</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-primary tracking-widest uppercase font-headline">合拍</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button 
             onClick={toggleFullscreen}
-            className="p-2 rounded-xl text-primary hover:bg-surface-container-high transition-all"
+            className="p-1.5 sm:p-2 rounded-xl text-primary hover:bg-surface-container-high transition-all"
             title={isFullscreen ? "退出全屏" : "全屏模式"}
           >
-            {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
+            {isFullscreen ? <Minimize2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
           <button 
             onClick={handleToggleFavorite}
-            className={`p-2 rounded-xl transition-all ${scoreData?.isFavorite ? 'text-secondary' : 'text-primary hover:bg-surface-container-high'}`}
+            className={`p-1.5 sm:p-2 rounded-xl transition-all ${scoreData?.isFavorite ? 'text-secondary' : 'text-primary hover:bg-surface-container-high'}`}
             title={scoreData?.isFavorite ? "取消收藏" : "收藏乐谱"}
           >
-            <Heart className={`w-6 h-6 ${scoreData?.isFavorite ? 'fill-secondary' : ''}`} />
+            <Heart className={`w-5 h-5 sm:w-6 sm:h-6 ${scoreData?.isFavorite ? 'fill-secondary' : ''}`} />
           </button>
-          {isOffline ? (
-            <div className="flex items-center gap-2 bg-tertiary/10 px-3 py-1.5 rounded-full border border-tertiary/20">
-              <CheckCircle className="text-tertiary w-4 h-4 fill-tertiary/20" />
-              <span className="text-[10px] font-bold text-tertiary uppercase tracking-tighter">已下载 - 离线可用</span>
-            </div>
-          ) : (
-            <button 
-              onClick={handleSaveOffline}
-              disabled={isSaving}
-              className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full border border-primary/20 transition-all"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Download className="text-primary w-4 h-4" />}
-              <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">
-                {isSaving ? '正在下载...' : '下载以离线使用'}
-              </span>
-            </button>
-          )}
+          <div className="hidden sm:flex items-center gap-3">
+            {isOffline ? (
+              <div className="flex items-center gap-2 bg-tertiary/10 px-3 py-1.5 rounded-full border border-tertiary/20">
+                <CheckCircle className="text-tertiary w-4 h-4 fill-tertiary/20" />
+                <span className="text-[10px] font-bold text-tertiary uppercase tracking-tighter">已下载 - 离线可用</span>
+              </div>
+            ) : (
+              <button 
+                onClick={handleSaveOffline}
+                disabled={isSaving}
+                className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full border border-primary/20 transition-all"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Download className="text-primary w-4 h-4" />}
+                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">
+                  {isSaving ? '正在下载...' : '下载以离线使用'}
+                </span>
+              </button>
+            )}
+          </div>
           <button 
             onClick={handleManualSave}
             disabled={isManualSaving}
-            className={`p-2 rounded-xl transition-all flex items-center gap-2 ${
+            className={`p-1.5 sm:p-2 rounded-xl transition-all flex items-center gap-2 ${
               isManualSaving ? 'bg-tertiary/20 text-tertiary' : 'text-primary hover:bg-surface-container-high'
             }`}
             title="保存所有更改"
           >
             {isManualSaving ? (
               <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter">保存中...</span>
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
+                <span className="text-[10px] font-bold uppercase tracking-tighter hidden sm:inline">保存中...</span>
               </>
             ) : (
-              <Save className="w-6 h-6" />
+              <Save className="w-5 h-5 sm:w-6 sm:h-6" />
             )}
           </button>
         </div>
       </header>
 
-      <nav className={`bg-surface-container-low px-6 py-2 flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
-        <div className="flex items-center gap-2">
-          <span className="text-on-background/70 text-sm font-medium">{scoreData?.title || '正在加载...'}</span>
+      <nav className={`bg-surface-container-low px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
+        <div className="flex items-center gap-2 overflow-hidden flex-1">
+          <span className="text-on-background/70 text-xs sm:text-sm font-medium truncate">{scoreData?.title || '正在加载...'}</span>
           
           {currentProgramIndex !== -1 && (
-            <div className="flex items-center gap-1 ml-4 bg-background p-1 rounded-lg border border-outline-variant/10">
+            <div className="flex items-center gap-1 ml-2 sm:ml-4 bg-background p-1 rounded-lg border border-outline-variant/10 flex-shrink-0">
               <button 
                 disabled={currentProgramIndex === 0}
                 onClick={() => handleNavigateProgram('prev')}
                 className={`p-1 rounded transition-all ${currentProgramIndex === 0 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
                 title="上一首"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
-              <span className="text-[10px] font-bold px-2 text-on-background/50">
-                节目单 {currentProgramIndex + 1} / {programIds.length}
+              <span className="text-[8px] sm:text-[10px] font-bold px-1 sm:px-2 text-on-background/50">
+                {currentProgramIndex + 1} / {programIds.length}
               </span>
               <button 
                 disabled={currentProgramIndex === programIds.length - 1}
@@ -804,7 +806,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
                 className={`p-1 rounded transition-all ${currentProgramIndex === programIds.length - 1 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
                 title="下一首"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
             </div>
           )}

@@ -395,22 +395,22 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
         )}
       </AnimatePresence>
 
-      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-6 py-4 bg-background/80 backdrop-blur-md">
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 bg-background/80 backdrop-blur-md">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Menu 
             onClick={() => setIsSidebarOpen(true)}
-            className="text-primary cursor-pointer w-6 h-6 hover:scale-110 transition-transform" 
+            className="text-primary cursor-pointer w-5 h-5 sm:w-6 sm:h-6 hover:scale-110 transition-transform" 
           />
-          <h1 className="font-headline font-bold text-lg tracking-tight text-primary uppercase">排练同步大厅</h1>
+          <h1 className="font-headline font-bold text-base sm:text-lg tracking-tight text-primary uppercase">排练同步大厅</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <RefreshCw 
             onClick={handleRefresh}
-            className={`text-primary cursor-pointer w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} 
+            className={`text-primary cursor-pointer w-5 h-5 sm:w-6 sm:h-6 ${isRefreshing ? 'animate-spin' : ''}`} 
           />
           <div 
             onClick={() => onViewChange('profile')}
-            className="flex items-center gap-3 pl-4 border-l border-outline-variant/10 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 pl-3 sm:pl-4 border-l border-outline-variant/10 cursor-pointer group"
           >
             <div className="text-right hidden sm:block">
               <div className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest leading-none mb-1">
@@ -420,36 +420,36 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                 {userProfile?.name || '音乐家'}
               </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all">
               {(userProfile?.name || '音')[0]}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="px-6 max-w-7xl mx-auto space-y-8 pt-4">
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-          <div className="md:col-span-8 bg-surface-container-high rounded-xl p-8 flex flex-col justify-between relative overflow-hidden group">
+      <main className="px-4 sm:px-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 pt-4">
+        <section className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 items-stretch">
+          <div className="md:col-span-8 bg-surface-container-high rounded-xl p-4 sm:p-8 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32"></div>
             <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <h2 className="font-headline text-on-background/50 text-xs font-bold uppercase tracking-[0.2em]">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <h2 className="font-headline text-on-background/50 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em]">
                     {isAdmin ? '主节拍控制 (Master Metronome)' : '同步节拍器 (Sync Metronome)'}
                   </h2>
                   {isPlaying && (
                     <motion.div 
                       animate={{ scale: pulse ? 1.5 : 1, opacity: pulse ? 1 : 0.3 }}
-                      className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(137,172,255,0.5)]"
+                      className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(137,172,255,0.5)]"
                     />
                   )}
                 </div>
                 
                 {isAdmin && (
-                  <div className="flex items-center gap-2 bg-background/50 p-1 rounded-xl border border-outline-variant/10">
+                  <div className="flex items-center gap-2 bg-background/50 p-1 rounded-xl border border-outline-variant/10 w-full sm:w-auto justify-between sm:justify-start">
                     <button 
                       onClick={() => setBpm(prev => Math.max(30, prev - 1))}
-                      className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container text-primary transition-colors"
+                      className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg hover:bg-surface-container text-primary transition-colors"
                     >
                       -1
                     </button>
@@ -459,39 +459,39 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                       max="250" 
                       value={bpm} 
                       onChange={(e) => setBpm(parseInt(e.target.value))}
-                      className="w-32 accent-primary"
+                      className="flex-1 sm:w-32 accent-primary"
                     />
                     <button 
                       onClick={() => setBpm(prev => Math.min(250, prev + 1))}
-                      className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container text-primary transition-colors"
+                      className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg hover:bg-surface-container text-primary transition-colors"
                     >
                       +1
                     </button>
                   </div>
                 )}
               </div>
-              <div className="flex items-end gap-4">
-                <span className="font-headline text-8xl md:text-9xl font-bold text-primary tracking-tighter">{bpm}</span>
-                <span className="font-headline text-2xl text-primary/40 mb-4">BPM</span>
+              <div className="flex items-end gap-2 sm:gap-4">
+                <span className="font-headline text-6xl sm:text-8xl md:text-9xl font-bold text-primary tracking-tighter">{bpm}</span>
+                <span className="font-headline text-xl sm:text-2xl text-primary/40 mb-2 sm:mb-4">BPM</span>
               </div>
             </div>
-            <div className="relative z-10 mt-8 flex flex-wrap items-center gap-4">
+            <div className="relative z-10 mt-6 sm:mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
               {isAdmin ? (
                 <>
                   <button 
                     onClick={() => setIsPlaying(!isPlaying)}
-                    className={`flex items-center gap-2 px-6 py-4 rounded-xl font-bold transition-all active:scale-95 ${isPlaying ? 'bg-primary text-on-primary shadow-lg shadow-primary/20' : 'bg-surface-container text-primary border border-outline-variant/10'}`}
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold transition-all active:scale-95 ${isPlaying ? 'bg-primary text-on-primary shadow-lg shadow-primary/20' : 'bg-surface-container text-primary border border-outline-variant/10'}`}
                   >
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                    {isPlaying ? '停止节拍' : '启动节拍'}
+                    {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
+                    <span>{isPlaying ? '停止节拍' : '启动节拍'}</span>
                   </button>
-                  <div className="relative">
+                  <div className="relative flex-1 sm:flex-none">
                     <button 
                       onClick={() => setIsTempoMenuOpen(!isTempoMenuOpen)}
-                      className="flex items-center gap-3 px-6 py-4 bg-surface-container hover:bg-surface-bright text-primary rounded-xl font-bold transition-all border border-outline-variant/10"
+                      className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 bg-surface-container hover:bg-surface-bright text-primary rounded-xl font-bold transition-all border border-outline-variant/10"
                     >
-                      <Music className="w-5 h-5" />
-                      <span>音乐术语: {
+                      <Music className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span>速度术语: {
                         [
                           { label: 'Grave', bpm: 40 },
                           { label: 'Largo', bpm: 46 },
@@ -551,33 +551,34 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                   </div>
                   <button 
                     onClick={pushMetronome}
-                    className={`flex items-center gap-2 px-6 py-4 rounded-xl font-bold transition-all active:scale-95 ${isSyncing ? 'bg-tertiary text-on-tertiary shadow-lg' : 'bg-primary/10 text-primary border border-primary/20'}`}
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold transition-all active:scale-95 ${isSyncing ? 'bg-tertiary text-on-tertiary shadow-lg' : 'bg-primary/10 text-primary border border-primary/20'}`}
                   >
-                    <Radio className={`w-5 h-5 ${isSyncing ? 'animate-pulse' : ''}`} />
-                    推送同步节拍
+                    <Radio className={`w-4 h-4 sm:w-5 sm:h-5 ${isSyncing ? 'animate-pulse' : ''}`} />
+                    <span>推送同步节拍</span>
                   </button>
                 </>
               ) : (
-                <div className="flex items-center gap-4 bg-primary/5 p-6 rounded-2xl border border-primary/10 w-full">
-                  <div className={`p-4 rounded-full ${isPlaying ? 'bg-primary text-on-primary animate-pulse' : 'bg-surface-container text-on-background/20'}`}>
-                    <Activity className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-on-background">
-                      {isPlaying ? '正在接收同步节拍' : '等待管理员启动'}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-primary/5 p-4 sm:p-6 rounded-2xl border border-primary/10 w-full">
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className={`p-3 sm:p-4 rounded-full ${isPlaying ? 'bg-primary text-on-primary animate-pulse' : 'bg-surface-container text-on-background/20'}`}>
+                      <Activity className="w-6 h-6 sm:w-8 sm:h-8" />
                     </div>
-                    <div className="text-sm text-on-background/50">
-                      {isSyncEnabled ? '同步模式已开启，节拍将与管理员保持一致' : '同步已关闭，您正在独立练习'}
+                    <div>
+                      <div className="text-base sm:text-lg font-bold text-on-background">
+                        {isPlaying ? '正在接收同步节拍' : '等待管理员启动'}
+                      </div>
+                      <div className="text-xs sm:text-sm text-on-background/50">
+                        {isSyncEnabled ? '同步模式已开启，节拍将与管理员保持一致' : '同步已关闭，您正在独立练习'}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-grow" />
-                  <div className="flex items-center gap-4 bg-background/50 p-4 rounded-xl border border-outline-variant/15">
-                    <span className="text-sm font-medium text-on-background/70">同步开关</span>
+                  <div className="flex items-center justify-between w-full sm:w-auto gap-4 bg-background/50 p-3 sm:p-4 rounded-xl border border-outline-variant/15">
+                    <span className="text-xs sm:text-sm font-medium text-on-background/70">同步开关</span>
                     <div 
                       onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                      className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${isSyncEnabled ? 'bg-secondary' : 'bg-outline-variant'}`}
+                      className={`w-10 sm:w-12 h-5 sm:h-6 rounded-full relative cursor-pointer transition-colors ${isSyncEnabled ? 'bg-secondary' : 'bg-outline-variant'}`}
                     >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isSyncEnabled ? 'right-1' : 'left-1'}`}></div>
+                      <div className={`absolute top-1 w-3 sm:w-4 h-3 sm:h-4 bg-white rounded-full transition-all ${isSyncEnabled ? 'right-1' : 'left-1'}`}></div>
                     </div>
                   </div>
                 </div>

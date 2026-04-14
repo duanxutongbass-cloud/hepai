@@ -743,24 +743,24 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
         </aside>
       </div>
 
-      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-6 py-4 bg-background/80 backdrop-blur-md">
-        <div className="flex items-center gap-4">
-          <Menu onClick={() => setIsSidebarOpen(true)} className="text-primary cursor-pointer w-6 h-6 hover:scale-110 transition-transform" />
-          <h1 className="font-headline font-bold text-lg tracking-tight text-primary uppercase">我的乐谱库</h1>
+      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 bg-background/80 backdrop-blur-md">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Menu onClick={() => setIsSidebarOpen(true)} className="text-primary cursor-pointer w-5 h-5 sm:w-6 sm:h-6 hover:scale-110 transition-transform" />
+          <h1 className="font-headline font-bold text-base sm:text-lg tracking-tight text-primary uppercase">我的乐谱库</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="relative">
             <button 
               onClick={() => setIsShowingNotifications(!isShowingNotifications)}
-              className="p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
+              className="p-1.5 sm:p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
             >
-              <Bell className="w-6 h-6" />
+              <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
               {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute top-1 right-1 w-3 h-3 bg-error rounded-full border-2 border-background"></span>
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-error rounded-full border-2 border-background"></span>
               )}
             </button>
             {isShowingNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[100] animate-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[100] animate-in slide-in-from-top-2 duration-200">
                 <div className="px-4 mb-3 flex justify-between items-center">
                   <h3 className="font-bold text-sm text-on-background">通知中心</h3>
                   <button 
@@ -803,32 +803,32 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                 {userProfile?.name || '音乐家'}
               </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all">
               {(userProfile?.name || '音')[0]}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="px-6 py-4 max-w-5xl mx-auto">
-        <section className="mb-8 space-y-6">
+      <main className="px-4 sm:px-6 py-4 max-w-5xl mx-auto">
+        <section className="mb-6 sm:mb-8 space-y-4 sm:space-y-6">
           <div className="relative group">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-              <Search className="text-outline w-5 h-5 group-focus-within:text-primary transition-colors" />
+              <Search className="text-outline w-4 h-4 sm:w-5 sm:h-5 group-focus-within:text-primary transition-colors" />
             </div>
             <input
-              className="w-full bg-surface-container-low border-none ring-1 ring-outline-variant/15 focus:ring-2 focus:ring-primary/50 rounded-xl py-4 pl-12 pr-4 text-on-background placeholder:text-on-background/30 transition-all shadow-sm"
+              className="w-full bg-surface-container-low border-none ring-1 ring-outline-variant/15 focus:ring-2 focus:ring-primary/50 rounded-xl py-3 sm:py-4 pl-10 sm:pl-12 pr-4 text-sm sm:text-base text-on-background placeholder:text-on-background/30 transition-all shadow-sm"
               placeholder="搜索作曲家、标题或关键词..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex bg-surface-container-low rounded-full p-1 shadow-inner">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex bg-surface-container-low rounded-full p-1 shadow-inner w-full sm:w-auto">
               <button 
                 onClick={() => setActiveTab('folders')}
-                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${
                   activeTab === 'folders' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:text-on-background'
                 }`}
               >
@@ -836,15 +836,15 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
               </button>
               <button 
                 onClick={() => setActiveTab('tags')}
-                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${
                   activeTab === 'tags' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:text-on-background'
                 }`}
               >
                 标签
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-surface-container-low rounded-full p-1 shadow-inner mr-2">
+            <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-2">
+              <div className="flex bg-surface-container-low rounded-full p-1 shadow-inner">
                 <button 
                   onClick={() => setViewMode('grid')}
                   className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-primary text-on-primary shadow-md' : 'text-on-background/50 hover:text-on-background'}`}
@@ -1986,9 +1986,9 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
         )}
         <button 
           onClick={() => setIsUploading(!isUploading)}
-          className="w-16 h-16 rounded-2xl bg-secondary text-on-secondary shadow-2xl flex items-center justify-center active:scale-90 hover:scale-105 transition-all z-40 group"
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-secondary text-on-secondary shadow-2xl flex items-center justify-center active:scale-90 hover:scale-105 transition-all z-40 group"
         >
-          {isUploading ? <X className="w-6 h-6" /> : <span className="text-3xl font-bold group-hover:rotate-90 transition-transform">+</span>}
+          {isUploading ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <span className="text-2xl sm:text-3xl font-bold group-hover:rotate-90 transition-transform">+</span>}
         </button>
         <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf" multiple onChange={handleAddScore} />
       </div>

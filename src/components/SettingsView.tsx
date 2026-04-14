@@ -81,19 +81,19 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
 
   return (
     <div className="pb-24">
-      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-6 py-4 bg-background/80 backdrop-blur-md">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-primary tracking-widest uppercase font-headline">系统设置</h1>
+      <header className="sticky top-0 z-50 flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 bg-background/80 backdrop-blur-md">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <h1 className="text-lg sm:text-xl font-bold text-primary tracking-widest uppercase font-headline">系统设置</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="relative">
             <button 
               onClick={() => setIsShowingNotifications(!isShowingNotifications)}
-              className="p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
+              className="p-1.5 sm:p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
             >
-              <Bell className="w-6 h-6" />
+              <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
               {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute top-1 right-1 w-3 h-3 bg-error rounded-full border-2 border-background"></span>
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-error rounded-full border-2 border-background"></span>
               )}
             </button>
             
@@ -105,7 +105,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 top-full mt-2 w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[70] overflow-hidden"
+                    className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[70] overflow-hidden"
                   >
                     <div className="px-4 mb-3 flex justify-between items-center">
                       <h3 className="font-bold text-sm text-on-background">通知中心</h3>
@@ -153,16 +153,16 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 space-y-10">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 space-y-8 sm:space-y-10">
         {/* Profile Card */}
-        <section className="bg-surface-container-high rounded-3xl p-6 border border-primary/20 shadow-lg overflow-hidden relative group cursor-pointer" onClick={() => onViewChange('profile')}>
+        <section className="bg-surface-container-high rounded-3xl p-4 sm:p-6 border border-primary/20 shadow-lg overflow-hidden relative group cursor-pointer" onClick={() => onViewChange('profile')}>
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-            <User className="w-32 h-32" />
+            <User className="w-24 h-24 sm:w-32 sm:h-32" />
           </div>
-          <div className="flex items-center justify-between relative z-10">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-4 sm:gap-6">
               <div className="relative">
-                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-3xl border-2 border-primary/20 shadow-inner overflow-hidden">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl sm:text-3xl border-2 border-primary/20 shadow-inner overflow-hidden">
                   {userProfile?.avatar ? (
                     <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
@@ -170,20 +170,20 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
                   )}
                 </div>
                 <div className="absolute -bottom-1 -right-1 p-1 bg-primary text-on-primary rounded-lg shadow-lg">
-                  <Settings className="w-3 h-3" />
+                  <Settings className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 </div>
               </div>
               <div>
-                <h2 className="text-2xl font-headline font-bold text-on-background">{userProfile?.name || '音乐家'}</h2>
+                <h2 className="text-xl sm:text-2xl font-headline font-bold text-on-background">{userProfile?.name || '音乐家'}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${isAdmin ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-background/50'}`}>
+                  <span className={`px-2 sm:px-3 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ${isAdmin ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-background/50'}`}>
                     {isAdmin ? '系统管理员' : '普通成员'}
                   </span>
-                  <span className="text-[10px] font-bold text-on-background/30 uppercase tracking-tighter">ID: 892734</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-on-background/30 uppercase tracking-tighter">ID: 892734</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-primary font-bold text-sm bg-primary/5 px-4 py-2 rounded-xl group-hover:bg-primary group-hover:text-on-primary transition-all">
+            <div className="flex items-center gap-2 text-primary font-bold text-xs bg-primary/5 px-4 py-2 rounded-xl group-hover:bg-primary group-hover:text-on-primary transition-all w-full sm:w-auto justify-center">
               <span>个人中心</span>
               <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>

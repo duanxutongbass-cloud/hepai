@@ -33,7 +33,7 @@ export default function BottomNav({ currentView, onViewChange }: BottomNavProps)
   ];
 
   return (
-    <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-2 bg-background/90 backdrop-blur-xl border-t border-outline-variant/15 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.12)]">
+    <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-4 sm:pb-6 pt-2 bg-background/90 backdrop-blur-xl border-t border-outline-variant/15 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.12)]">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
