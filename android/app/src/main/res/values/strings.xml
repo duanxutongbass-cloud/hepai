@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nocturne Sync</string>
+    <string name="title_activity_main">Nocturne Sync</string>
+    <string name="package_name">com.nocturne.sync</string>
+    <string name="custom_url_scheme">com.nocturne.sync</string>
+</resources>

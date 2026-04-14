@@ -1,0 +1,12 @@
+{
+	"appId": "com.nocturne.sync",
+	"appName": "Nocturne Sync",
+	"webDir": "dist",
+	"packageClassList": [
+		"DevicePlugin",
+		"FilesystemPlugin",
+		"SharePlugin",
+		"SplashScreenPlugin",
+		"StatusBarPlugin"
+	]
+}

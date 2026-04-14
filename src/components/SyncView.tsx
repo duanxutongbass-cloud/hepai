@@ -42,6 +42,8 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editGroupName, setEditGroupName] = useState('');
   
+  const [isTempoMenuOpen, setIsTempoMenuOpen] = useState(false);
+  
   const metronomeAudioContext = useRef<AudioContext | null>(null);
   const globalStartTimeRef = useRef<number>(Date.now());
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -70,13 +72,17 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
     if (!isChatFolded && currentChat.length > 0) {
       const container = chatEndRef.current?.parentElement;
       if (container) {
-        const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
-        const lastMessage = currentChat[currentChat.length - 1];
-        const isMyMessage = lastMessage.senderId === 'CURRENT_USER_ID';
-        
-        if (isAtBottom || isMyMessage) {
-          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
+        // Use a small timeout to ensure DOM is updated
+        const timer = setTimeout(() => {
+          const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+          const lastMessage = currentChat[currentChat.length - 1];
+          const isMyMessage = lastMessage.senderId === 'CURRENT_USER_ID';
+          
+          if (isAtBottom || isMyMessage) {
+            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+        return () => clearTimeout(timer);
       }
     }
   }, [currentChat, isChatFolded]);
@@ -479,22 +485,69 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                     {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                     {isPlaying ? '停止节拍' : '启动节拍'}
                   </button>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: 'Adagio', bpm: 56 },
-                      { label: 'Andante', bpm: 84 },
-                      { label: 'Moderato', bpm: 112 },
-                      { label: 'Allegro', bpm: 132 },
-                      { label: 'Presto', bpm: 180 },
-                    ].map(tempo => (
-                      <button 
-                        key={tempo.label}
-                        onClick={() => setBpm(tempo.bpm)}
-                        className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${bpm === tempo.bpm ? 'bg-primary text-on-primary' : 'bg-background hover:bg-primary/10 text-on-background/50'}`}
-                      >
-                        {tempo.label} ({tempo.bpm})
-                      </button>
-                    ))}
+                  <div className="relative">
+                    <button 
+                      onClick={() => setIsTempoMenuOpen(!isTempoMenuOpen)}
+                      className="flex items-center gap-3 px-6 py-4 bg-surface-container hover:bg-surface-bright text-primary rounded-xl font-bold transition-all border border-outline-variant/10"
+                    >
+                      <Music className="w-5 h-5" />
+                      <span>音乐术语: {
+                        [
+                          { label: 'Grave', bpm: 40 },
+                          { label: 'Largo', bpm: 46 },
+                          { label: 'Adagio', bpm: 56 },
+                          { label: 'Andante', bpm: 84 },
+                          { label: 'Moderato', bpm: 112 },
+                          { label: 'Allegro', bpm: 132 },
+                          { label: 'Vivace', bpm: 160 },
+                          { label: 'Presto', bpm: 180 },
+                        ].find(t => t.bpm === bpm)?.label || '自定义'
+                      }</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${isTempoMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isTempoMenuOpen && (
+                        <>
+                          <div className="fixed inset-0 z-[65]" onClick={() => setIsTempoMenuOpen(false)} />
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute bottom-full left-0 mb-2 w-64 bg-surface-container-high border border-outline-variant/10 rounded-2xl shadow-2xl py-3 z-[70] overflow-hidden"
+                          >
+                            <div className="px-4 py-2 text-[10px] font-bold text-on-background/30 uppercase tracking-widest border-b border-outline-variant/5 mb-2">常用速度术语</div>
+                            <div className="grid grid-cols-1 gap-1">
+                              {[
+                                { label: 'Grave', bpm: 40, desc: '庄板' },
+                                { label: 'Largo', bpm: 46, desc: '广板' },
+                                { label: 'Adagio', bpm: 56, desc: '柔板' },
+                                { label: 'Andante', bpm: 84, desc: '行板' },
+                                { label: 'Moderato', bpm: 112, desc: '中板' },
+                                { label: 'Allegro', bpm: 132, desc: '快板' },
+                                { label: 'Vivace', bpm: 160, desc: '活泼' },
+                                { label: 'Presto', bpm: 180, desc: '急板' },
+                              ].map(tempo => (
+                                <button 
+                                  key={tempo.label}
+                                  onClick={() => {
+                                    setBpm(tempo.bpm);
+                                    setIsTempoMenuOpen(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-2 text-sm font-bold flex items-center justify-between transition-colors ${bpm === tempo.bpm ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
+                                >
+                                  <div className="flex flex-col">
+                                    <span>{tempo.label}</span>
+                                    <span className="text-[10px] opacity-50">{tempo.desc}</span>
+                                  </div>
+                                  <span className="text-xs font-mono">{tempo.bpm} BPM</span>
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
                   </div>
                   <button 
                     onClick={pushMetronome}
@@ -583,6 +636,97 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
             )}
           </div>
         </section>
+
+        {isAdmin && (
+          <section className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div className="md:col-span-8 bg-surface-container-high rounded-2xl p-8 flex flex-col justify-between relative overflow-hidden group border border-outline-variant/10 shadow-lg">
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Activity className="w-32 h-32" />
+              </div>
+              <div className="relative z-10">
+                <h2 className="font-headline font-bold text-3xl tracking-tight text-on-background mb-2">实时同步控制</h2>
+                <p className="text-on-background/50 font-body mb-8 max-w-sm">将当前节目单实时推送至所有连接的成员设备。</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsSyncing(true);
+                  setTimeout(() => setIsSyncing(false), 2000);
+                }}
+                disabled={isSyncing}
+                className={`w-fit flex items-center gap-3 px-8 py-4 rounded-full text-on-secondary font-bold text-md uppercase tracking-widest shadow-xl active:scale-95 transition-all ${isSyncing ? 'bg-secondary/50' : 'bg-secondary hover:bg-secondary/80'}`}
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    正在推送...
+                  </>
+                ) : (
+                  <>
+                    <Radio className="w-5 h-5" />
+                    推送给所有成员
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="md:col-span-4 flex flex-col gap-6">
+              <div className="bg-surface-container-high rounded-2xl p-8 flex-1 flex flex-col items-center justify-center text-center border border-outline-variant/10 shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-tertiary" />
+                <div className="mb-4 relative">
+                  <svg className="w-32 h-32 transform -rotate-90">
+                    <circle className="text-surface-container" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" strokeWidth="8"></circle>
+                    <circle className="text-tertiary" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" strokeDasharray="364.42" strokeDashoffset="0" strokeWidth="8"></circle>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-headline font-bold text-on-background">24/24</span>
+                    <span className="text-[10px] uppercase tracking-tighter text-tertiary font-bold">实时状态</span>
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold font-headline mb-1">网络已同步</h3>
+                <p className="text-xs text-on-background/50 font-body">所有成员正在接收实时数据流。</p>
+              </div>
+
+              <div className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 shadow-lg">
+                <div 
+                  onClick={() => setIsOnlineMembersFolded(!isOnlineMembersFolded)}
+                  className="flex items-center justify-between cursor-pointer mb-4 group"
+                >
+                  <h3 className="text-xs font-bold text-on-background/50 uppercase tracking-widest">在线成员</h3>
+                  <div className="p-1 hover:bg-surface-container rounded transition-colors">
+                    {isOnlineMembersFolded ? <ChevronDown className="w-4 h-4 text-on-background/30" /> : <ChevronUp className="w-4 h-4 text-on-background/30" />}
+                  </div>
+                </div>
+                
+                <AnimatePresence>
+                  {!isOnlineMembersFolded && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="space-y-3 overflow-hidden"
+                    >
+                      {members.slice(0, 3).map(member => (
+                        <div key={member.name} className="flex items-center justify-between p-3 bg-background rounded-xl border border-outline-variant/5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">
+                              {member.name[0]}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-on-background">{member.name}</div>
+                              <div className="text-[10px] text-on-background/40">{member.role}</div>
+                            </div>
+                          </div>
+                          <div className="w-1.5 h-1.5 bg-tertiary rounded-full shadow-[0_0_5px_rgba(0,255,0,0.5)]" />
+                        </div>
+                      ))}
+                      <button className="w-full py-2 text-[10px] font-bold text-primary uppercase tracking-widest hover:bg-primary/5 rounded-lg transition-colors">查看全部 24 位成员</button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Group Management Section */}
         <section className="space-y-6">
@@ -776,13 +920,15 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative">
           <div className={`lg:col-span-8 flex flex-col bg-surface-container-high rounded-2xl border border-outline-variant/10 overflow-hidden shadow-xl transition-all duration-500 ${isChatFolded ? 'h-16' : 'h-[500px]'}`}>
             <div 
-              onClick={() => {
-                setIsChatFolded(!isChatFolded);
-                if (isChatFolded) setUnreadCounts(prev => ({ ...prev, [activeGroupId]: 0 }));
-              }}
               className="p-4 border-b border-outline-variant/10 bg-surface-bright flex items-center justify-between cursor-pointer hover:bg-surface-container transition-colors"
             >
-              <div className="flex items-center gap-3">
+              <div 
+                className="flex items-center gap-3 flex-1"
+                onClick={() => {
+                  setIsChatFolded(!isChatFolded);
+                  if (isChatFolded) setUnreadCounts(prev => ({ ...prev, [activeGroupId]: 0 }));
+                }}
+              >
                 <div className="p-2 bg-primary/10 rounded-lg relative">
                   <MessageSquare className="w-4 h-4 text-primary" />
                   {Object.values(unreadCounts).reduce((a, b) => a + b, 0) > 0 && (
@@ -794,13 +940,34 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
                 </h3>
               </div>
               <div className="flex items-center gap-4">
+                {isMainAdmin && activeGroup && !isChatFolded && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingGroupId(activeGroup.id);
+                      setEditGroupName(activeGroup.name);
+                    }}
+                    className="p-2 hover:bg-primary/10 rounded-lg text-primary transition-colors"
+                    title="重命名群组"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                )}
                 {!isChatFolded && (
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-tertiary rounded-full animate-pulse" />
                     <span className="text-[10px] font-bold text-tertiary uppercase tracking-widest">本地同步中</span>
                   </div>
                 )}
-                {isChatFolded ? <ChevronDown className="w-4 h-4 text-on-background/30" /> : <ChevronUp className="w-4 h-4 text-on-background/30" />}
+                <div 
+                  className="p-2 hover:bg-surface-container rounded-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsChatFolded(!isChatFolded);
+                  }}
+                >
+                  {isChatFolded ? <ChevronDown className="w-4 h-4 text-on-background/30" /> : <ChevronUp className="w-4 h-4 text-on-background/30" />}
+                </div>
               </div>
             </div>
             
@@ -858,46 +1025,7 @@ export default function SyncView({ onViewChange, isAdmin: initialIsAdmin }: Sync
 
           {isAdmin && (
             <div className="lg:col-span-4 space-y-6">
-              <div className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 shadow-lg">
-                <div 
-                  onClick={() => setIsOnlineMembersFolded(!isOnlineMembersFolded)}
-                  className="flex items-center justify-between cursor-pointer mb-4 group"
-                >
-                  <h3 className="text-sm font-bold text-on-background/50 uppercase tracking-widest">在线成员 (仅管理员可见)</h3>
-                  <div className="p-1 hover:bg-surface-container rounded transition-colors">
-                    {isOnlineMembersFolded ? <ChevronDown className="w-4 h-4 text-on-background/30" /> : <ChevronUp className="w-4 h-4 text-on-background/30" />}
-                  </div>
-                </div>
-                
-                <AnimatePresence>
-                  {!isOnlineMembersFolded && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="space-y-3 overflow-hidden"
-                    >
-                      {members.map(member => (
-                        <div key={member.name} className="flex items-center justify-between p-3 bg-background rounded-xl border border-outline-variant/5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-xs">
-                              {member.name[0]}
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold text-on-background">{member.name}</div>
-                              <div className="text-[10px] text-on-background/40">{member.role}</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] font-bold text-tertiary">12ms</div>
-                            <div className="w-1.5 h-1.5 bg-tertiary rounded-full shadow-[0_0_5px_rgba(0,255,0,0.5)]" />
-                          </div>
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              {/* Moved to top section */}
             </div>
           )}
         </section>

@@ -5,6 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Device } from '@capacitor/device';
+import { SplashScreen } from '@capacitor/splash-screen';
 import LibraryView from './components/LibraryView';
 import SetlistView from './components/SetlistView';
 import SyncView from './components/SyncView';
@@ -38,6 +41,18 @@ export default function App() {
       const meta = await storageService.getMetadata();
       setIsAdmin(meta.userRole === 'admin' || meta.userRole === 'sub-admin');
       setUserProfile(meta.profile);
+
+      // Capacitor Initialization
+      try {
+        const info = await Device.getInfo();
+        if (info.platform !== 'web') {
+          await StatusBar.setStyle({ style: Style.Dark });
+          await StatusBar.setBackgroundColor({ color: '#040a2f' });
+          await SplashScreen.hide();
+        }
+      } catch (e) {
+        console.warn('Capacitor not available:', e);
+      }
     };
     loadInitial();
   }, []);

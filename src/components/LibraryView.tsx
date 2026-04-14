@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 const PDFPreview = ({ file }: { file: File | Blob }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1018,9 +1018,9 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                 )}
               </div>
             </div>
-            <div className={`grid gap-4 ${
-              viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 
-              viewMode === 'compact' ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' : 
+            <div className={`grid gap-3 sm:gap-4 ${
+              viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
+              viewMode === 'compact' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6' : 
               'grid-cols-1'
             }`}>
               {!selectedFolder && folders.map(folder => (
@@ -1990,7 +1990,7 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
         >
           {isUploading ? <X className="w-6 h-6" /> : <span className="text-3xl font-bold group-hover:rotate-90 transition-transform">+</span>}
         </button>
-        <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" multiple onChange={handleAddScore} />
+        <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf" multiple onChange={handleAddScore} />
       </div>
       {/* Metadata Management Modal */}
       {isManagingMetadata && (
