@@ -1,11 +1,51 @@
-import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users } from 'lucide-react';
+import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface SettingsViewProps {
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean) => void;
+  onViewChange: (view: any) => void;
 }
 
-export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps) {
+export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: SettingsViewProps) {
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushSuccess, setPushSuccess] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [message, setMessage] = useState<{ text: string, type: 'info' | 'error' } | null>(null);
+
+  const showMessage = (text: string, type: 'info' | 'error' = 'info') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handlePush = () => {
+    setIsPushing(true);
+    setTimeout(() => {
+      setIsPushing(false);
+      setPushSuccess(true);
+      setTimeout(() => setPushSuccess(false), 3000);
+    }, 2000);
+  };
+
+  const handleExport = () => {
+    setIsExporting(true);
+    setExportProgress(0);
+    const interval = setInterval(() => {
+      setExportProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setIsExporting(false);
+            showMessage('ZIP 包已生成并开始下载');
+          }, 500);
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 100);
+  };
   const members = [
     { name: 'Alex M.', img: 'https://i.pravatar.cc/150?u=alex' },
     { name: 'Sarah K.', img: 'https://i.pravatar.cc/150?u=sarah' },
@@ -27,6 +67,35 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 space-y-8">
+        <section className="bg-surface-container-high rounded-3xl p-6 border border-primary/20 shadow-lg overflow-hidden relative group cursor-pointer" onClick={() => onViewChange('profile')}>
+          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+            <User className="w-32 h-32" />
+          </div>
+          <div className="flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-3xl border-2 border-primary/20 shadow-inner">张</div>
+                <div className="absolute -bottom-1 -right-1 p-1 bg-primary text-on-primary rounded-lg shadow-lg">
+                  <Settings className="w-3 h-3" />
+                </div>
+              </div>
+              <div>
+                <h2 className="text-2xl font-headline font-bold text-on-background">张三</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${isAdmin ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-background/50'}`}>
+                    {isAdmin ? '系统管理员' : '普通成员'}
+                  </span>
+                  <span className="text-[10px] font-bold text-on-background/30 uppercase tracking-tighter">ID: 892734</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-primary font-bold text-sm bg-primary/5 px-4 py-2 rounded-xl group-hover:bg-primary group-hover:text-on-primary transition-all">
+              <span>个人中心</span>
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </section>
+
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-surface-container-high rounded-xl p-8 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -36,8 +105,24 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
               <h2 className="font-headline font-bold text-3xl tracking-tight text-on-background mb-2">实时同步控制</h2>
               <p className="text-on-background/50 font-body mb-8 max-w-sm">将当前节目单实时推送至所有连接的成员设备。</p>
             </div>
-            <button className="w-fit flex items-center gap-3 bg-secondary hover:bg-secondary/80 px-8 py-4 rounded-full text-on-secondary font-bold text-md uppercase tracking-widest shadow-xl active:scale-95 transition-all">
-              推送给所有成员
+            <button 
+              onClick={handlePush}
+              disabled={isPushing}
+              className={`w-fit flex items-center gap-3 px-8 py-4 rounded-full text-on-secondary font-bold text-md uppercase tracking-widest shadow-xl active:scale-95 transition-all ${isPushing ? 'bg-secondary/50' : 'bg-secondary hover:bg-secondary/80'}`}
+            >
+              {isPushing ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  正在推送...
+                </>
+              ) : pushSuccess ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5" />
+                  推送成功
+                </>
+              ) : (
+                '推送给所有成员'
+              )}
             </button>
           </div>
 
@@ -58,10 +143,10 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="md:col-span-7 glass-panel rounded-xl p-8 space-y-6">
+          <div className="md:col-span-12 glass-panel rounded-xl p-8 space-y-6">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="font-headline font-semibold text-xl tracking-tight">身份与权限设置</h2>
-              <UserCheck className="text-primary w-5 h-5" />
+              <h2 className="font-headline font-semibold text-xl tracking-tight">权限模式切换</h2>
+              <Shield className="text-primary w-5 h-5" />
             </div>
             <div className="p-6 bg-surface-container-low rounded-2xl border border-outline-variant/10">
               <div className="flex items-center justify-between">
@@ -80,19 +165,6 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
                 >
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isAdmin ? 'right-1' : 'left-1'}`} />
                 </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="md:col-span-5 flex flex-col gap-6">
-            <div className="bg-surface-container-high rounded-xl p-8 flex-1 flex flex-col justify-center">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-4">当前身份状态</h3>
-              <div className="flex items-center gap-4 p-4 bg-background/40 rounded-xl">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20">张</div>
-                <div>
-                  <p className="font-bold text-on-background text-lg">张三</p>
-                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{isAdmin ? '系统管理员' : '普通成员'}</p>
-                </div>
               </div>
             </div>
           </div>
@@ -135,9 +207,19 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
               </label>
             </div>
             <div className="pt-4">
-              <button className="w-full bg-surface-bright border border-outline-variant hover:border-primary py-5 rounded-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all group">
-                <FolderArchive className="text-primary group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-on-background tracking-wide uppercase">一键生成并导出 ZIP 包</span>
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`w-full bg-surface-bright border border-outline-variant hover:border-primary py-5 rounded-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all group ${isExporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isExporting ? (
+                  <RefreshCw className="text-primary animate-spin" />
+                ) : (
+                  <FolderArchive className="text-primary group-hover:scale-110 transition-transform" />
+                )}
+                <span className="font-bold text-on-background tracking-wide uppercase">
+                  {isExporting ? `正在生成 (${exportProgress}%)` : '一键生成并导出 ZIP 包'}
+                </span>
               </button>
             </div>
           </div>
@@ -147,24 +229,35 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
               <div className="flex justify-between items-end mb-4">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-1">存档引擎</h3>
-                  <p className="text-2xl font-headline font-bold">正在打包...</p>
+                  <p className="text-2xl font-headline font-bold">{isExporting ? '正在打包...' : '就绪'}</p>
                 </div>
-                <span className="text-4xl font-headline font-light text-primary">68<span className="text-lg opacity-50">%</span></span>
+                <span className="text-4xl font-headline font-light text-primary">{isExporting ? exportProgress : 0}<span className="text-lg opacity-50">%</span></span>
               </div>
               <div className="w-full h-3 bg-surface-container-low rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-tertiary w-[68%] rounded-full shadow-[0_0_12px_rgba(137,172,255,0.4)]"></div>
+                <div 
+                  className="h-full bg-gradient-to-r from-primary to-tertiary rounded-full shadow-[0_0_12px_rgba(137,172,255,0.4)] transition-all duration-300"
+                  style={{ width: `${isExporting ? exportProgress : 0}%` }}
+                ></div>
               </div>
               <div className="mt-6 flex items-center gap-3 py-2 px-3 bg-background/40 rounded-lg">
-                <RefreshCw className="text-tertiary w-4 h-4 animate-spin-slow" />
-                <span className="text-[10px] text-on-background/50 font-mono uppercase">正在处理: strings_section_final.pdf</span>
+                <RefreshCw className={`text-tertiary w-4 h-4 ${isExporting ? 'animate-spin' : ''}`} />
+                <span className="text-[10px] text-on-background/50 font-mono uppercase">
+                  {isExporting ? '正在处理: strings_section_final.pdf' : '等待任务...'}
+                </span>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-surface-container rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high transition-colors cursor-pointer border border-transparent hover:border-outline-variant/30">
+              <div 
+                onClick={() => showMessage('历史记录功能即将上线')}
+                className="bg-surface-container rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high transition-colors cursor-pointer border border-transparent hover:border-outline-variant/30"
+              >
                 <History className="text-on-background/50 w-5 h-5" />
                 <span className="text-[10px] font-bold uppercase text-on-background/50">历史记录</span>
               </div>
-              <div className="bg-surface-container rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high transition-colors cursor-pointer border border-transparent hover:border-outline-variant/30">
+              <div 
+                onClick={() => showMessage('报告生成功能即将上线')}
+                className="bg-surface-container rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-high transition-colors cursor-pointer border border-transparent hover:border-outline-variant/30"
+              >
                 <BarChart className="text-on-background/50 w-5 h-5" />
                 <span className="text-[10px] font-bold uppercase text-on-background/50">报告</span>
               </div>
@@ -194,6 +287,23 @@ export default function SettingsView({ isAdmin, setIsAdmin }: SettingsViewProps)
           </div>
         </section>
       </main>
+
+      {/* Message Toast */}
+      <AnimatePresence>
+        {message && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${
+              message.type === 'error' ? 'bg-error/90 text-on-error border-error' : 'bg-primary/90 text-on-primary border-primary'
+            }`}
+          >
+            {message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+            <span className="font-bold text-sm">{message.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

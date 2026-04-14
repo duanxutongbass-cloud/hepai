@@ -6,6 +6,7 @@ import {
   Play, Pause, Volume2, AlertCircle, ChevronLeft, List
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Set up PDF.js worker
@@ -49,7 +50,7 @@ const PDFPreview = ({ file }: { file: File | Blob }) => {
 
   return <canvas ref={canvasRef} className="w-full h-full object-contain" />;
 };
-import { storageService, ScoreData, ScorePart, Notification } from '../services/storageService';
+import { storageService, ScoreData, ScorePart, Notification, Setlist } from '../services/storageService';
 
 interface LibraryViewProps {
   onOpenScore: (scoreId: string) => void;
@@ -65,6 +66,8 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
   const [searchQuery, setSearchQuery] = useState('');
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [programIds, setProgramIds] = useState<string[]>([]);
+  const [setlists, setSetlists] = useState<Setlist[]>([]);
+  const [activeSetlistId, setActiveSetlistId] = useState<string>('');
   const [tags, setTags] = useState<string[]>(['钢琴谱', '小提琴', '大提琴', '古典', '浪漫主义', '现代', '练习曲', '奏鸣曲']);
   const [isEditingScore, setIsEditingScore] = useState<ScoreData | null>(null);
   const [isAddingTag, setIsAddingTag] = useState(false);
@@ -90,6 +93,17 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
   const [isShowingAmbiguityDialog, setIsShowingAmbiguityDialog] = useState(false);
   const [isCreatingNewCollection, setIsCreatingNewCollection] = useState(false);
   const [newCollectionTitle, setNewCollectionTitle] = useState('');
+  const [confirmingClearProgram, setConfirmingClearProgram] = useState(false);
+  const [confirmingDeleteScoreId, setConfirmingDeleteScoreId] = useState<string | null>(null);
+  const [confirmingRemoveFromProgramId, setConfirmingRemoveFromProgramId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string, type: 'info' | 'error' } | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>('member');
+
+  const showMessage = (text: string, type: 'info' | 'error' = 'info') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
 
   const instrumentCodes: { [key: string]: string } = {
     '01': '第一小提琴',
@@ -153,7 +167,7 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
 
     // Permission check: Members cannot rename admin folders
     if (!isAdmin) {
-      alert('成员无权更改管理员发布的文件夹名字');
+      showMessage('成员无权更改管理员发布的文件夹名字', 'error');
       setEditingFolderName(null);
       return;
     }
@@ -192,6 +206,8 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     setGlobalRoles(meta.roles);
     setGlobalPartTags(meta.partTags);
     setFolderAliases(meta.folderAliases?.['admin'] || {});
+    setSetlists(meta.setlists || []);
+    setActiveSetlistId(meta.activeSetlistId || '');
     
     // Convert folder cover blobs to URLs
     const covers: { [key: string]: string } = {};
@@ -206,6 +222,8 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
       { id: '1', type: 'request', title: '声部加入请求', message: '李四 申请加入 第一小提琴 声部', timestamp: Date.now(), read: false },
       { id: '2', type: 'upload', title: '新乐谱上传', message: '王五 上传了《天鹅湖》', timestamp: Date.now() - 3600000, read: true }
     ]);
+    setUserProfile(meta.profile);
+    setUserRole(meta.userRole || 'member');
   };
 
   const loadScores = async () => {
@@ -225,7 +243,13 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     }
     setScores(allScores);
     const meta = await storageService.getMetadata();
-    setProgramIds(meta.program || []);
+    
+    const activeSet = (meta.setlists || []).find(s => s.id === (meta.activeSetlistId || ''));
+    if (activeSet) {
+      setProgramIds(activeSet.program);
+    } else {
+      setProgramIds(meta.program || []);
+    }
   };
 
   const handleAddScore = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -506,13 +530,21 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
 
   const handleAddToProgram = async (score: ScoreData) => {
     if (programIds.includes(score.id)) {
-      alert('该乐谱已在节目单中');
+      alert('该乐谱已在当前节目单中');
       return;
     }
     const next = [...programIds, score.id];
     setProgramIds(next);
-    await storageService.saveMetadata({ program: next });
-    alert(`《${score.title}》已添加到节目单`);
+    
+    if (activeSetlistId) {
+      const nextSetlists = setlists.map(s => s.id === activeSetlistId ? { ...s, program: next } : s);
+      setSetlists(nextSetlists);
+      await storageService.saveMetadata({ setlists: nextSetlists });
+    } else {
+      await storageService.saveMetadata({ program: next });
+    }
+    
+    alert(`《${score.title}》已添加到当前节目单`);
     setActiveMenuId(null);
   };
 
@@ -521,20 +553,35 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     const newIds = folderScores.map(s => s.id).filter(id => !programIds.includes(id));
     
     if (newIds.length === 0) {
-      alert('文件夹中的乐谱已全部在节目单中');
+      alert('文件夹中的乐谱已全部在当前节目单中');
       return;
     }
 
     const next = [...programIds, ...newIds];
     setProgramIds(next);
-    await storageService.saveMetadata({ program: next });
-    alert(`文件夹“${folderName}”中的 ${newIds.length} 份新乐谱已添加到节目单`);
+    
+    if (activeSetlistId) {
+      const nextSetlists = setlists.map(s => s.id === activeSetlistId ? { ...s, program: next } : s);
+      setSetlists(nextSetlists);
+      await storageService.saveMetadata({ setlists: nextSetlists });
+    } else {
+      await storageService.saveMetadata({ program: next });
+    }
+    
+    alert(`文件夹“${folderName}”中的 ${newIds.length} 份新乐谱已添加到当前节目单`);
   };
 
   const handleRemoveFromProgram = async (scoreId: string) => {
     const next = programIds.filter(id => id !== scoreId);
     setProgramIds(next);
-    await storageService.saveMetadata({ program: next });
+    
+    if (activeSetlistId) {
+      const nextSetlists = setlists.map(s => s.id === activeSetlistId ? { ...s, program: next } : s);
+      setSetlists(nextSetlists);
+      await storageService.saveMetadata({ setlists: nextSetlists });
+    } else {
+      await storageService.saveMetadata({ program: next });
+    }
   };
 
   const handleMoveProgramItem = async (index: number, direction: 'up' | 'down') => {
@@ -544,7 +591,14 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     
     [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
     setProgramIds(next);
-    await storageService.saveMetadata({ program: next });
+    
+    if (activeSetlistId) {
+      const nextSetlists = setlists.map(s => s.id === activeSetlistId ? { ...s, program: next } : s);
+      setSetlists(nextSetlists);
+      await storageService.saveMetadata({ setlists: nextSetlists });
+    } else {
+      await storageService.saveMetadata({ program: next });
+    }
   };
 
   const handleDownloadPDF = (score: ScoreData) => {
@@ -694,59 +748,66 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
           <Menu onClick={() => setIsSidebarOpen(true)} className="text-primary cursor-pointer w-6 h-6 hover:scale-110 transition-transform" />
           <h1 className="font-headline font-bold text-lg tracking-tight text-primary uppercase">我的乐谱库</h1>
         </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <button 
-                  onClick={() => setIsShowingNotifications(!isShowingNotifications)}
-                  className="p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
-                >
-                  <Bell className="w-6 h-6" />
-                  {notifications.filter(n => !n.read).length > 0 && (
-                    <span className="absolute top-1 right-1 w-3 h-3 bg-error rounded-full border-2 border-background"></span>
-                  )}
-                </button>
-                {isShowingNotifications && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[100] animate-in slide-in-from-top-2 duration-200">
-                    <div className="px-4 mb-3 flex justify-between items-center">
-                      <h3 className="font-bold text-sm text-on-background">通知中心</h3>
-                      <button 
-                        onClick={markAllAsRead}
-                        className="text-[10px] font-bold text-primary uppercase tracking-tighter hover:underline"
-                      >
-                        全部已读
-                      </button>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                      {notifications.length > 0 ? [...notifications].sort((a, b) => b.timestamp - a.timestamp).map(n => (
-                        <div 
-                          key={n.id} 
-                          onClick={() => markAsRead(n.id)}
-                          className={`px-4 py-3 hover:bg-surface-container transition-colors cursor-pointer border-l-4 ${n.read ? 'border-transparent bg-transparent opacity-60' : 'border-primary bg-primary/5'}`}
-                        >
-                          <div className="flex justify-between items-start mb-0.5">
-                            <p className={`text-xs font-bold ${n.read ? 'text-on-background/70' : 'text-on-background'}`}>{n.title}</p>
-                            {!n.read && <span className="w-2 h-2 bg-primary rounded-full"></span>}
-                          </div>
-                          <p className="text-[10px] text-on-background/60 leading-relaxed">{n.message}</p>
-                          <p className="text-[8px] text-on-background/30 mt-1 font-mono">{new Date(n.timestamp).toLocaleString()}</p>
-                        </div>
-                      )) : (
-                        <div className="px-4 py-8 text-center text-on-background/30 text-xs">暂无通知</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 relative group">
-                  张
-                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-background ${isAdmin ? 'bg-primary' : 'bg-on-background/20'}`}></div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <button 
+              onClick={() => setIsShowingNotifications(!isShowingNotifications)}
+              className="p-2 hover:bg-surface-container-high rounded-full text-primary transition-all relative"
+            >
+              <Bell className="w-6 h-6" />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute top-1 right-1 w-3 h-3 bg-error rounded-full border-2 border-background"></span>
+              )}
+            </button>
+            {isShowingNotifications && (
+              <div className="absolute right-0 top-full mt-2 w-80 bg-surface-bright rounded-2xl shadow-2xl border border-outline-variant/10 py-4 z-[100] animate-in slide-in-from-top-2 duration-200">
+                <div className="px-4 mb-3 flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-on-background">通知中心</h3>
+                  <button 
+                    onClick={markAllAsRead}
+                    className="text-[10px] font-bold text-primary uppercase tracking-tighter hover:underline"
+                  >
+                    全部已读
+                  </button>
                 </div>
-                <span className={`text-[8px] font-bold uppercase tracking-tighter mt-1 ${isAdmin ? 'text-primary' : 'text-on-background/30'}`}>
-                  {isAdmin ? '管理员' : '成员'}
-                </span>
+                <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                  {notifications.length > 0 ? [...notifications].sort((a, b) => b.timestamp - a.timestamp).map(n => (
+                    <div 
+                      key={n.id} 
+                      onClick={() => markAsRead(n.id)}
+                      className={`px-4 py-3 hover:bg-surface-container transition-colors cursor-pointer border-l-4 ${n.read ? 'border-transparent bg-transparent opacity-60' : 'border-primary bg-primary/5'}`}
+                    >
+                      <div className="flex justify-between items-start mb-0.5">
+                        <p className={`text-xs font-bold ${n.read ? 'text-on-background/70' : 'text-on-background'}`}>{n.title}</p>
+                        {!n.read && <span className="w-2 h-2 bg-primary rounded-full"></span>}
+                      </div>
+                      <p className="text-[10px] text-on-background/60 leading-relaxed">{n.message}</p>
+                      <p className="text-[8px] text-on-background/30 mt-1 font-mono">{new Date(n.timestamp).toLocaleString()}</p>
+                    </div>
+                  )) : (
+                    <div className="px-4 py-8 text-center text-on-background/30 text-xs">暂无通知</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div 
+            onClick={() => onViewChange('profile')}
+            className="flex items-center gap-3 pl-4 border-l border-outline-variant/10 cursor-pointer group"
+          >
+            <div className="text-right hidden sm:block">
+              <div className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest leading-none mb-1">
+                {userRole === 'admin' ? '主管理员' : userRole === 'sub-admin' ? '二级管理员' : '乐团成员'}
+              </div>
+              <div className="text-xs font-bold text-on-background group-hover:text-primary transition-colors">
+                {userProfile?.name || '音乐家'}
               </div>
             </div>
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all">
+              {(userProfile?.name || '音')[0]}
+            </div>
+          </div>
+        </div>
       </header>
 
       <main className="px-6 py-4 max-w-5xl mx-auto">
@@ -822,17 +883,36 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                 当前节目单
               </h2>
               {programIds.length > 0 && (
-                <button 
-                  onClick={async () => {
-                    if (confirm('确定要清空节目单吗？')) {
-                      setProgramIds([]);
-                      await storageService.saveMetadata({ program: [] });
-                    }
-                  }}
-                  className="text-xs font-bold text-error hover:bg-error/5 px-3 py-1.5 rounded-full transition-all"
-                >
-                  清空节目单
-                </button>
+                <div className="flex items-center gap-2">
+                  {confirmingClearProgram ? (
+                    <div className="flex items-center gap-2 bg-error/10 px-3 py-1.5 rounded-full border border-error/20 animate-in fade-in slide-in-from-right-2">
+                      <span className="text-[10px] font-bold text-error uppercase">确定清空?</span>
+                      <button 
+                        onClick={async () => {
+                          setProgramIds([]);
+                          await storageService.saveMetadata({ program: [] });
+                          setConfirmingClearProgram(false);
+                        }}
+                        className="text-xs font-bold text-error hover:underline"
+                      >
+                        确认
+                      </button>
+                      <button 
+                        onClick={() => setConfirmingClearProgram(false)}
+                        className="text-on-background/30"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setConfirmingClearProgram(true)}
+                      className="text-xs font-bold text-error hover:bg-error/5 px-3 py-1.5 rounded-full transition-all"
+                    >
+                      清空节目单
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             
@@ -877,18 +957,32 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                         )}
                       </div>
                       
-                      <div className="flex-1 min-w-0" onClick={() => handleOpenScore(score.id)}>
+                      <div className="flex-1 min-w-0" onClick={() => onOpenScore(score.id)}>
                         <h4 className="font-bold text-on-background truncate">{score.title}</h4>
                         <p className="text-xs text-on-background/50 truncate">{score.composer || '未知'}</p>
                       </div>
                       
-                      <button 
-                        onClick={() => handleRemoveFromProgram(id)}
-                        className="p-2 text-on-background/20 hover:text-error transition-colors"
-                        title="从节目单移除"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      {confirmingRemoveFromProgramId === id ? (
+                        <div className="flex items-center gap-2 bg-error/10 px-3 py-1.5 rounded-xl border border-error/20 animate-in fade-in scale-95">
+                          <button 
+                            onClick={() => handleRemoveFromProgram(id)}
+                            className="text-[10px] font-bold text-error uppercase"
+                          >
+                            确认移除
+                          </button>
+                          <button onClick={() => setConfirmingRemoveFromProgramId(null)}>
+                            <X className="w-4 h-4 text-on-background/30" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setConfirmingRemoveFromProgramId(id)}
+                          className="p-2 text-on-background/20 hover:text-error transition-colors"
+                          title="从节目单移除"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -1254,19 +1348,49 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                                 <Star className="w-4 h-4" />
                                 <span>添加到节目单</span>
                               </button>
-                              {isAdmin && (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm('确定要删除吗？')) {
-                                      storageService.deleteScore(score.id).then(() => loadScores());
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-3 px-4 py-2 text-sm text-error hover:bg-error/5 transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span>删除乐谱</span>
-                                </button>
+                              {(isAdmin || score.uploaderId === 'MEMBER_MOCK') && (
+                                <div className="border-t border-outline-variant/10 mt-1 pt-1">
+                                  {confirmingDeleteScoreId === score.id ? (
+                                    <div className="flex items-center justify-between px-4 py-2 bg-error/10">
+                                      <span className="text-[10px] font-bold text-error uppercase">确定删除?</span>
+                                      <div className="flex gap-2">
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            storageService.deleteScore(score.id).then(() => {
+                                              loadScores();
+                                              setConfirmingDeleteScoreId(null);
+                                              setActiveMenuId(null);
+                                            });
+                                          }}
+                                          className="text-[10px] font-bold text-error hover:underline"
+                                        >
+                                          确认
+                                        </button>
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setConfirmingDeleteScoreId(null);
+                                          }}
+                                          className="text-on-background/30"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConfirmingDeleteScoreId(score.id);
+                                      }}
+                                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-error hover:bg-error/5 transition-colors"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      <span>删除乐谱</span>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}
@@ -1497,6 +1621,25 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
                       </label>
                     )}
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-background/50 ml-1">BPM (速度)</label>
+                  <input 
+                    type="number"
+                    className="w-full bg-surface-container-low rounded-xl px-4 py-3 border border-outline-variant/20 focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                    value={isEditingScore.bpm || ''}
+                    placeholder="例如: 120"
+                    onChange={(e) => setIsEditingScore({...isEditingScore, bpm: parseInt(e.target.value) || undefined})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-background/50 ml-1">调性</label>
+                  <input 
+                    className="w-full bg-surface-container-low rounded-xl px-4 py-3 border border-outline-variant/20 focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                    value={isEditingScore.key || ''}
+                    placeholder="例如: C Major"
+                    onChange={(e) => setIsEditingScore({...isEditingScore, key: e.target.value})}
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-background/50 ml-1">乐谱类型</label>
@@ -2142,6 +2285,22 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
           </div>
         </div>
       )}
+      {/* Message Toast */}
+      <AnimatePresence>
+        {message && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${
+              message.type === 'error' ? 'bg-error/90 text-on-error border-error' : 'bg-primary/90 text-on-primary border-primary'
+            }`}
+          >
+            {message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+            <span className="font-bold text-sm">{message.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

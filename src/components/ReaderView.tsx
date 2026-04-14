@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Edit3, Highlighter, Eraser, Mic, Layers, Trash2, Grid, CheckCircle, Bell, Menu, PlayCircle, RefreshCw, Music, Download, Loader2, Save, Undo, Type, X, MousePointer2, Maximize2, Minimize2, PenTool, Settings2, Play, Pause, Volume2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ChevronLeft, ChevronRight, Edit3, Highlighter, Eraser, Mic, Layers, Trash2, Grid, CheckCircle, Bell, Menu, PlayCircle, RefreshCw, Music, Download, Loader2, Save, Undo, Type, X, MousePointer2, Maximize2, Minimize2, PenTool, Settings2, Play, Pause, Volume2, Activity, Share2, Radio, Heart, ShieldAlert, UserCog, MessageSquare, Battery, Wifi, ChevronDown } from 'lucide-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import CanvasDraw from 'react-canvas-draw';
 import { storageService, ScoreData, PlacedObject } from '../services/storageService';
@@ -14,12 +15,14 @@ interface ReaderViewProps {
   onBack: () => void;
   scoreId: string | null;
   isAdmin: boolean;
+  onNavigateScore?: (scoreId: string) => void;
+  initialFullscreen?: boolean;
 }
 
 const musicSymbols = ['p', 'pp', 'mp', 'mf', 'f', 'ff', 'sfz', 'cresc.', 'dim.', 'tr', '♮', '♯', '♭'];
 const fingerings = ['1', '2', '3', '4', '5'];
 
-export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps) {
+export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, initialFullscreen }: ReaderViewProps) {
   const [activeTool, setActiveTool] = useState<'select' | 'edit' | 'highlight' | 'eraser' | 'stamp' | 'text'>('select');
   const [selectedStamp, setSelectedStamp] = useState<{ type: 'symbol' | 'fingering' | 'text', content: string } | null>(null);
   const [activeColor, setActiveColor] = useState<string>('#000000');
@@ -38,13 +41,97 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
   const [isManualSaving, setIsManualSaving] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen || false);
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
   const [isSymbolsPanelOpen, setIsSymbolsPanelOpen] = useState(false);
+  const [showUI, setShowUI] = useState(!initialFullscreen);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [touchStart, setTouchStart] = useState<number | null>(null);
-  
-  // Audio Playback State
+  const [programIds, setProgramIds] = useState<string[]>([]);
+  const [isMetronomeOpen, setIsMetronomeOpen] = useState(false);
+  const [isPartsMenuOpen, setIsPartsMenuOpen] = useState(false);
+  const [bpm, setBpm] = useState(120);
+  const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
+  const [pulse, setPulse] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
+  const [isRoleRequestOpen, setIsRoleRequestOpen] = useState(false);
+  const [latency, setLatency] = useState(12);
+  const [battery, setBattery] = useState(85);
+  const metronomeAudioContext = useRef<AudioContext | null>(null);
+  const globalStartTimeRef = useRef<number>(Date.now());
+
+  // Sync Listener
+  useEffect(() => {
+    const channel = new BroadcastChannel('nocturne-sync');
+    channel.onmessage = (event) => {
+      const { type, data } = event.data;
+      if (type === 'PUSH_SCORE' && !isAdmin) {
+        if (onNavigateScore && data.scoreId !== scoreId) {
+          onNavigateScore(data.scoreId);
+        }
+      }
+      if (type === 'PUSH_METRONOME' && !isAdmin) {
+        setBpm(data.bpm);
+        setIsMetronomePlaying(data.isPlaying);
+        globalStartTimeRef.current = data.startTime;
+      }
+    };
+    return () => channel.close();
+  }, [isAdmin, scoreId, onNavigateScore]);
+
+  // Metronome Sound Logic
+  const playClick = () => {
+    if (!metronomeAudioContext.current) {
+      metronomeAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    const ctx = metronomeAudioContext.current;
+    const osc = ctx.createOscillator();
+    const envelope = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, ctx.currentTime);
+    envelope.gain.setValueAtTime(1, ctx.currentTime);
+    envelope.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+
+    osc.connect(envelope);
+    envelope.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.05);
+  };
+
+  useEffect(() => {
+    if (!isMetronomePlaying) return;
+    const interval = 60000 / bpm;
+    
+    // Strict Phase Sync
+    const now = Date.now();
+    const timeSinceStart = now - globalStartTimeRef.current;
+    const msIntoBeat = timeSinceStart % interval;
+    const delayToNextBeat = interval - msIntoBeat;
+
+    let timer: NodeJS.Timeout;
+    const startMetronome = () => {
+      timer = setInterval(() => {
+        setPulse(true);
+        playClick();
+        setTimeout(() => setPulse(false), 100);
+      }, interval);
+    };
+
+    const initialTimeout = setTimeout(() => {
+      setPulse(true);
+      playClick();
+      setTimeout(() => setPulse(false), 100);
+      startMetronome();
+    }, delayToNextBeat);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (timer) clearInterval(timer);
+    };
+  }, [isMetronomePlaying, bpm]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -83,6 +170,16 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
     const loadScore = async () => {
       if (!scoreId) return;
       setIsLoading(true);
+      
+      // Load program for navigation
+      const meta = await storageService.getMetadata();
+      const activeSet = (meta.setlists || []).find(s => s.id === (meta.activeSetlistId || ''));
+      if (activeSet) {
+        setProgramIds(activeSet.program);
+      } else {
+        setProgramIds(meta.program || []);
+      }
+
       const saved = await storageService.getScore(scoreId);
       if (saved) {
         setScoreData(saved);
@@ -267,15 +364,44 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
   const handleScoreClick = (e: React.MouseEvent) => {
     // If clicking on the text input form itself, don't trigger a new placement
     if ((e.target as HTMLElement).closest('form')) return;
-    // If we are in select mode or just dragging, don't place a new object
-    if (activeTool === 'select' || draggingId) return;
     
-    if (activeTool !== 'stamp' && activeTool !== 'text') return;
-    
+    // Middle click or tap to toggle UI
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    const width = rect.width;
 
+    // If in select mode or just dragging, don't place a new object
+    if (activeTool === 'select' || draggingId) {
+      // In select mode, we can still use side taps for page turning
+      if (x < width * 0.2) {
+        if (pageNumber > 1) setPageNumber(prev => prev - 1);
+        return;
+      }
+      if (x > width * 0.8) {
+        if (pageNumber < numPages) setPageNumber(prev => prev + 1);
+        return;
+      }
+      
+      // Middle tap toggles UI
+      setShowUI(!showUI);
+      return;
+    }
+    
+    if (activeTool !== 'stamp' && activeTool !== 'text') {
+      // Even if not in stamp/text mode, allow page turning and UI toggle
+      if (x < width * 0.2) {
+        if (pageNumber > 1) setPageNumber(prev => prev - 1);
+        return;
+      }
+      if (x > width * 0.8) {
+        if (pageNumber < numPages) setPageNumber(prev => prev + 1);
+        return;
+      }
+      setShowUI(!showUI);
+      return;
+    }
+    
     if (activeTool === 'stamp' && selectedStamp) {
       const newObj: PlacedObject = {
         id: Math.random().toString(36).substr(2, 9),
@@ -431,9 +557,172 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
     setSelectedStamp({ type, content });
   };
 
+  const currentProgramIndex = scoreId ? programIds.indexOf(scoreId) : -1;
+
+  const pushMetronome = async () => {
+    const startTime = Date.now();
+    globalStartTimeRef.current = startTime;
+    const channel = new BroadcastChannel('nocturne-sync');
+    channel.postMessage({
+      type: 'PUSH_METRONOME',
+      data: { bpm, isPlaying: isMetronomePlaying, startTime }
+    });
+    setIsSyncing(true);
+    setTimeout(() => setIsSyncing(false), 1500);
+  };
+
+  const pushScore = async () => {
+    if (!scoreId) return;
+    const channel = new BroadcastChannel('nocturne-sync');
+    channel.postMessage({
+      type: 'PUSH_SCORE',
+      data: { scoreId, title: scoreData?.title }
+    });
+    setIsSyncing(true);
+    setPushFeedback(`正在推送乐谱: ${scoreData?.title}...`);
+    setTimeout(() => {
+      setPushFeedback(`乐谱推送成功! 12 台设备已同步`);
+      setTimeout(() => {
+        setPushFeedback(null);
+        setIsSyncing(false);
+      }, 3000);
+    }, 1500);
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!scoreData) return;
+    const updated = { ...scoreData, isFavorite: !scoreData.isFavorite };
+    await storageService.saveScore(updated);
+    setScoreData(updated);
+  };
+
+  const handleRequestRole = async (role: string) => {
+    const meta = await storageService.getMetadata();
+    const newRequest = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: 'USER_MOCK_ID', // In real app, get from auth
+      userName: '当前成员',
+      requestedRole: role,
+      timestamp: Date.now(),
+      status: 'pending' as const
+    };
+    const updatedRequests = [...(meta.roleRequests || []), newRequest];
+    await storageService.saveMetadata({ roleRequests: updatedRequests });
+    setIsRoleRequestOpen(false);
+    setPushFeedback(`已提交声部变更申请: ${role}`);
+    setTimeout(() => setPushFeedback(null), 3000);
+  };
+  const handleNavigateProgram = (direction: 'prev' | 'next') => {
+    if (currentProgramIndex === -1 || !onNavigateScore) return;
+    const nextIndex = direction === 'next' ? currentProgramIndex + 1 : currentProgramIndex - 1;
+    if (nextIndex >= 0 && nextIndex < programIds.length) {
+      onNavigateScore(programIds[nextIndex]);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      <header className={`bg-background flex justify-between items-center w-full px-6 py-4 border-b border-outline-variant/10 transition-all ${isFullscreen ? 'h-0 py-0 overflow-hidden border-none' : ''}`}>
+      {/* Push Feedback Toast */}
+      <AnimatePresence>
+        {pushFeedback && (
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[200] bg-surface-container-high border border-primary/20 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3"
+          >
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+            <span className="text-sm font-bold text-primary tracking-wide">{pushFeedback}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Member Sync Status Overlay */}
+      {!isAdmin && showUI && (
+        <div className="fixed bottom-24 right-6 z-[100] flex flex-col gap-2">
+          <div className="bg-background/80 backdrop-blur-md border border-outline-variant/10 p-3 rounded-2xl shadow-xl flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Wifi className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-background/30 uppercase tracking-widest">延迟</div>
+                <div className="text-sm font-bold text-primary">{latency}ms</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${battery < 20 ? 'bg-secondary/10' : 'bg-tertiary/10'}`}>
+                <Battery className={`w-4 h-4 ${battery < 20 ? 'text-secondary' : 'text-tertiary'}`} />
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-background/30 uppercase tracking-widest">电量</div>
+                <div className={`text-sm font-bold ${battery < 20 ? 'text-secondary' : 'text-tertiary'}`}>{battery}%</div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setIsRoleRequestOpen(true)}
+              className="mt-1 flex items-center justify-center gap-2 py-2 bg-surface-container rounded-xl text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/10 transition-all"
+            >
+              <UserCog className="w-3 h-3" />
+              变更声部
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Role Request Modal */}
+      <AnimatePresence>
+        {isRoleRequestOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsRoleRequestOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-md bg-surface-container-high rounded-3xl shadow-2xl p-8 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 bg-primary/10 rounded-2xl">
+                    <UserCog className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-primary">申请变更声部</h3>
+                    <p className="text-xs text-on-background/50">变更声部需经管理员批准</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 mb-8">
+                  {['第一小提琴', '第二小提琴', '中提琴', '大提琴', '低音提琴', '钢琴', '指挥'].map(role => (
+                    <button 
+                      key={role}
+                      onClick={() => handleRequestRole(role)}
+                      className="py-4 bg-surface-container rounded-2xl font-bold text-sm text-on-background/70 hover:bg-primary hover:text-on-primary transition-all active:scale-95"
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+                
+                <button 
+                  onClick={() => setIsRoleRequestOpen(false)}
+                  className="w-full py-4 rounded-2xl font-bold text-sm text-on-background/30 hover:text-on-background transition-all"
+                >
+                  取消
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <header className={`bg-background flex justify-between items-center w-full px-6 py-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-primary hover:bg-surface-container-high p-2 rounded-xl transition-all">
             <ChevronLeft className="w-6 h-6" />
@@ -447,6 +736,13 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
             title={isFullscreen ? "退出全屏" : "全屏模式"}
           >
             {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
+          </button>
+          <button 
+            onClick={handleToggleFavorite}
+            className={`p-2 rounded-xl transition-all ${scoreData?.isFavorite ? 'text-secondary' : 'text-primary hover:bg-surface-container-high'}`}
+            title={scoreData?.isFavorite ? "取消收藏" : "收藏乐谱"}
+          >
+            <Heart className={`w-6 h-6 ${scoreData?.isFavorite ? 'fill-secondary' : ''}`} />
           </button>
           {isOffline ? (
             <div className="flex items-center gap-2 bg-tertiary/10 px-3 py-1.5 rounded-full border border-tertiary/20">
@@ -485,34 +781,82 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
         </div>
       </header>
 
-      <nav className={`bg-surface-container-low px-6 py-2 flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/10 transition-all ${isFullscreen ? 'h-0 py-0 overflow-hidden border-none' : ''}`}>
+      <nav className={`bg-surface-container-low px-6 py-2 flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/10 transition-all duration-500 ${!showUI ? 'h-0 py-0 opacity-0 overflow-hidden border-none' : 'h-auto opacity-100'}`}>
         <div className="flex items-center gap-2">
           <span className="text-on-background/70 text-sm font-medium">{scoreData?.title || '正在加载...'}</span>
+          
+          {currentProgramIndex !== -1 && (
+            <div className="flex items-center gap-1 ml-4 bg-background p-1 rounded-lg border border-outline-variant/10">
+              <button 
+                disabled={currentProgramIndex === 0}
+                onClick={() => handleNavigateProgram('prev')}
+                className={`p-1 rounded transition-all ${currentProgramIndex === 0 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
+                title="上一首"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[10px] font-bold px-2 text-on-background/50">
+                节目单 {currentProgramIndex + 1} / {programIds.length}
+              </span>
+              <button 
+                disabled={currentProgramIndex === programIds.length - 1}
+                onClick={() => handleNavigateProgram('next')}
+                className={`p-1 rounded transition-all ${currentProgramIndex === programIds.length - 1 ? 'opacity-20' : 'text-primary hover:bg-primary/10'}`}
+                title="下一首"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {scoreData?.parts && scoreData.parts.length > 0 && (
             <>
               <span className="text-outline-variant text-xs mx-2">|</span>
-              <div className="flex items-center gap-2 bg-background p-1 rounded-lg border border-outline-variant/10">
+              <div className="relative">
                 <button 
-                  onClick={() => handlePartChange(-1)}
-                  className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${currentPartIndex === -1 ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:text-primary'}`}
+                  onClick={() => setIsPartsMenuOpen(!isPartsMenuOpen)}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                    isPartsMenuOpen ? 'bg-primary text-on-primary' : 'bg-surface-container text-primary hover:bg-surface-bright'
+                  }`}
                 >
-                  总谱
+                  <Layers className="w-4 h-4" />
+                  {currentPartIndex === -1 ? '总谱' : scoreData.parts[currentPartIndex].name}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${isPartsMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {scoreData.parts.map((part, idx) => {
-                  // Visibility logic: Admin sees all, members see assigned
-                  const isVisible = isAdmin || !part.assignedTo?.length || part.assignedTo.includes('VN'); // Mock 'VN' as current user
-                  if (!isVisible) return null;
 
-                  return (
-                    <button 
-                      key={part.id}
-                      onClick={() => handlePartChange(idx)}
-                      className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${currentPartIndex === idx ? 'bg-primary text-on-primary' : 'text-on-background/50 hover:text-primary'}`}
+                <AnimatePresence>
+                  {isPartsMenuOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute bottom-full left-0 mb-2 w-48 bg-surface-container-high border border-outline-variant/10 rounded-2xl shadow-2xl py-2 z-50"
                     >
-                      {part.name}
-                    </button>
-                  );
-                })}
+                      <button 
+                        onClick={() => { handlePartChange(-1); setIsPartsMenuOpen(false); }}
+                        className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === -1 ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
+                      >
+                        总谱 (Full Score)
+                      </button>
+                      <div className="h-px bg-outline-variant/10 my-1" />
+                      {scoreData.parts.map((part, idx) => {
+                        const isVisible = isAdmin || !part.assignedTo?.length || part.assignedTo.includes('VN');
+                        if (!isVisible) return null;
+
+                        return (
+                          <button 
+                            key={part.id}
+                            onClick={() => { handlePartChange(idx); setIsPartsMenuOpen(false); }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${currentPartIndex === idx ? 'text-primary bg-primary/10' : 'text-on-background/70 hover:bg-surface-container'}`}
+                          >
+                            {part.name}
+                            <span className="ml-2 opacity-40 text-[10px]">[{part.assignedTo?.join(', ') || '未分配'}]</span>
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </>
           )}
@@ -526,6 +870,30 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
             <PenTool className="w-4 h-4" />
             {isToolbarOpen ? '收起工具' : '开启批注'}
           </button>
+          <span className="text-outline-variant text-xs mx-2">|</span>
+          <button 
+            onClick={() => setIsMetronomeOpen(!isMetronomeOpen)}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+              isMetronomeOpen ? 'bg-secondary text-on-secondary shadow-lg' : 'bg-surface-container text-secondary hover:bg-surface-bright'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            节拍器
+          </button>
+          {isAdmin && (
+            <>
+              <span className="text-outline-variant text-xs mx-2">|</span>
+              <button 
+                onClick={pushScore}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                  isSyncing ? 'bg-tertiary text-on-tertiary' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                }`}
+              >
+                <Share2 className={`w-4 h-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+                推送乐谱
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center bg-background p-1 rounded-full border border-outline-variant/15">
@@ -555,8 +923,8 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
         )}
       </nav>
 
-      <main className="flex-1 relative overflow-hidden flex flex-row" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <section ref={containerRef} className={`flex-1 overflow-y-auto custom-scrollbar bg-surface-container-low transition-all ${isFullscreen ? 'p-0' : 'p-4 md:p-8'} flex flex-col items-center`}>
+      <main className={`flex-1 relative overflow-hidden transition-all ${isFullscreen ? 'p-0' : 'p-4 md:p-8'}`}>
+        <section ref={containerRef} className={`w-full h-full overflow-y-auto custom-scrollbar bg-surface-container-low transition-all flex flex-col items-center ${isFullscreen ? 'p-0' : 'p-4'}`}>
           <div 
             className={`max-w-4xl w-full bg-white relative overflow-hidden min-h-[600px] flex justify-center transition-all duration-500 ${isFullscreen ? 'shadow-none rounded-none' : 'shadow-2xl rounded-lg'} ${orientation === 'landscape' ? 'rotate-90' : ''}`}
             style={{ 
@@ -662,8 +1030,83 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
           </div>
         </section>
 
+        {/* Metronome Panel */}
+        <AnimatePresence>
+          {isMetronomeOpen && showUI && (
+            <motion.div 
+              initial={{ x: 100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 100, opacity: 0 }}
+              className="fixed right-24 top-1/2 -translate-y-1/2 z-50 bg-surface-bright/95 backdrop-blur-2xl p-6 rounded-3xl shadow-2xl border border-outline-variant/10 w-64"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-headline font-bold text-primary uppercase tracking-widest text-xs">节拍器</h3>
+                <button onClick={() => setIsMetronomeOpen(false)}><X className="w-4 h-4 text-on-background/30" /></button>
+              </div>
+
+              <div className="flex flex-col items-center gap-6">
+                <div className="relative">
+                  <div className="text-6xl font-headline font-bold text-primary tracking-tighter">{bpm}</div>
+                  <div className="text-[10px] font-bold text-primary/40 uppercase absolute -right-8 bottom-2">BPM</div>
+                  {isMetronomePlaying && (
+                    <motion.div 
+                      animate={{ scale: pulse ? 1.5 : 1, opacity: pulse ? 1 : 0.2 }}
+                      className="absolute -top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-secondary rounded-full shadow-[0_0_10px_rgba(255,137,137,0.5)]"
+                    />
+                  )}
+                </div>
+
+                <input 
+                  type="range" 
+                  min="40" 
+                  max="240" 
+                  value={bpm}
+                  onChange={(e) => setBpm(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary"
+                />
+
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => setIsMetronomePlaying(!isMetronomePlaying)}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all active:scale-95 ${isMetronomePlaying ? 'bg-secondary text-on-secondary shadow-lg' : 'bg-surface-container text-secondary'}`}
+                  >
+                    {isMetronomePlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isMetronomePlaying ? '停止' : '开始'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const now = Date.now();
+                      if (saveTimeoutRef.current) { // Reusing ref for tap logic
+                        const diff = now - (saveTimeoutRef.current as any);
+                        const newBpm = Math.round(60000 / diff);
+                        if (newBpm > 30 && newBpm < 300) setBpm(newBpm);
+                      }
+                      (saveTimeoutRef.current as any) = now;
+                    }}
+                    className="bg-surface-container text-primary py-3 rounded-xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all"
+                  >
+                    手动打拍
+                  </button>
+                </div>
+
+                {isAdmin && (
+                  <button 
+                    onClick={pushMetronome}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${
+                      isSyncing ? 'bg-tertiary text-on-tertiary shadow-lg' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                    }`}
+                  >
+                    <Radio className={`w-4 h-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+                    推送同步节拍
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Floating Toolbar */}
-        <div className={`fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 transition-all duration-500 ${isToolbarOpen ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}>
+        <div className={`fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-50 transition-all duration-500 ${isToolbarOpen && !isFullscreen && showUI ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}>
           <div className="bg-surface-bright/90 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col gap-2">
             <button 
               onClick={() => setActiveTool('select')}
@@ -813,65 +1256,73 @@ export default function ReaderView({ onBack, scoreId, isAdmin }: ReaderViewProps
           </div>
         )}
 
+        {/* Fullscreen Exit Button */}
         {isFullscreen && (
           <button 
             onClick={toggleFullscreen}
-            className="fixed top-6 right-6 z-[60] bg-black/20 hover:bg-black/40 backdrop-blur-md text-white p-3 rounded-full transition-all"
+            className={`fixed top-6 right-6 z-[60] bg-black/40 hover:bg-black/60 backdrop-blur-md text-white p-2 rounded-full transition-all shadow-lg ${showUI ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           >
-            <Minimize2 className="w-6 h-6" />
+            <Minimize2 className="w-5 h-5" />
           </button>
         )}
 
-        <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-3 bg-background/90 backdrop-blur-xl rounded-full border border-outline-variant/10 shadow-2xl z-50 transition-all ${isFullscreen ? 'opacity-0 hover:opacity-100 translate-y-4 hover:translate-y-0' : 'opacity-100'}`}>
-          <div className="flex items-center gap-4">
+        {/* Page Navigation Overlay */}
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${showUI ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+          <div className="bg-surface-bright/90 backdrop-blur-xl px-6 py-3 rounded-full shadow-2xl border border-outline-variant/10 flex items-center gap-6">
             <button 
               disabled={pageNumber <= 1}
               onClick={() => setPageNumber(prev => prev - 1)}
-              className="text-on-background/50 hover:text-primary transition-colors disabled:opacity-20"
+              className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-6 h-6" />
             </button>
-            <span className="font-headline font-bold text-sm tracking-widest text-primary min-w-[80px] text-center">
-              {pageNumber} / {numPages || '--'} 页
-            </span>
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold text-primary">第 {pageNumber} / {numPages} 页</span>
+              <div className="w-32 h-1 bg-outline-variant/20 rounded-full mt-1 overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300" 
+                  style={{ width: `${(pageNumber / numPages) * 100}%` }}
+                ></div>
+              </div>
+            </div>
             <button 
               disabled={pageNumber >= numPages}
               onClick={() => setPageNumber(prev => prev + 1)}
-              className="text-on-background/50 hover:text-primary transition-colors disabled:opacity-20"
+              className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-6 h-6" />
             </button>
           </div>
-
-          {scoreData?.audioBlob && (
-            <>
-              <div className="w-px h-6 bg-outline-variant/20" />
-              <div className="flex items-center gap-4 min-w-[300px]">
-                <button 
-                  onClick={togglePlayback}
-                  className="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-full shadow-lg hover:scale-105 transition-all"
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <PlayCircle className="w-6 h-6" />}
-                </button>
-                <div className="flex-1 flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-bold text-on-background/40 uppercase tracking-tighter">
-                    <span>{formatTime((audioProgress / 100) * audioDuration)}</span>
-                    <span>{formatTime(audioDuration)}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    value={audioProgress}
-                    onChange={handleProgressChange}
-                    className="w-full h-1.5 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary"
-                  />
-                </div>
-                <Volume2 className="w-4 h-4 text-on-background/40" />
-              </div>
-            </>
-          )}
         </div>
+
+        {/* Audio Player Overlay */}
+        {scoreData?.audioBlob && (
+          <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${showUI ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+            <div className="bg-surface-bright/90 backdrop-blur-xl px-8 py-4 rounded-3xl shadow-2xl border border-outline-variant/10 flex items-center gap-6 min-w-[400px]">
+              <button 
+                onClick={togglePlayback}
+                className="w-12 h-12 flex items-center justify-center bg-primary text-on-primary rounded-full shadow-lg hover:scale-105 transition-all"
+              >
+                {isPlaying ? <Pause className="w-6 h-6" /> : <PlayCircle className="w-7 h-7" />}
+              </button>
+              <div className="flex-1 flex flex-col gap-2">
+                <div className="flex justify-between text-[10px] font-bold text-on-background/40 uppercase tracking-tighter">
+                  <span>{formatTime((audioProgress / 100) * audioDuration)}</span>
+                  <span>{formatTime(audioDuration)}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={audioProgress}
+                  onChange={handleProgressChange}
+                  className="w-full h-1.5 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+              <Volume2 className="w-5 h-5 text-on-background/40" />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
