@@ -4,8 +4,8 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // 强迫 Vite 认定 /app 为根目录，不再猜测
-  root: process.cwd(),
+  // 显式锁定根目录
+  root: '/app',
   base: '/',
   plugins: [
     react(),
@@ -13,22 +13,17 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // 显式指定 @ 符号指向 src 目录
-      '@': path.resolve(process.cwd(), 'src'),
+      // 这里的路径必须与 Docker 容器内部路径完全一致
+      '@': path.resolve('/app/src'),
+      '/src': path.resolve('/app/src'),
     },
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
     emptyOutDir: true,
-    // 强制指定入口 HTML，防止解析失败
     rollupOptions: {
-      input: path.resolve(process.cwd(), 'index.html'),
+      // 强制手动指定输入点，防止 HTML 解析歧义
+      input: path.resolve('/app/index.html'),
     },
   },
-  server: {
-    hmr: false,
-    host: '0.0.0.0',
-    port: 3000
-  }
 });
