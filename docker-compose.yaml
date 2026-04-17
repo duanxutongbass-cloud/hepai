@@ -4,26 +4,22 @@ services:
   nocturne-app:
     image: node:22-alpine
     container_name: nocturne-sync-server
-    # 自动重启，确保排练时服务器挂了能秒回
     restart: always
     ports:
       - "3001:3000"
     volumes:
-      # 将代码文件夹挂载到容器中
       - .:/app
-      # 确保乐谱存储目录持久化
       - ./uploads:/app/uploads
     working_dir: /app
     environment:
       - NODE_ENV=production
-      # --- 已根据您的要求设置永久参数 ---
-      - DB_HOST=192.168.31.250  # 您的 NAS 固定 IP
+      - DB_HOST=192.168.31.250     # 您的 NAS IP
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=A9878480a！
+      - DB_PASSWORD=A9878480a！    # 您的数据库密码
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
-    # 启动命令：集成国内镜像、强制依赖安装及编译
+    # 启动指令：自动换源、安装所有依赖、构建并运行
     command: sh -c "npm config set registry https://registry.npmmirror.com && npm install --include=dev --legacy-peer-deps && npm run build && npm start"
 
 networks:
