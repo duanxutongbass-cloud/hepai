@@ -7,12 +7,19 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
+    root: '.',
+    base: '/',
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        injectRegister: 'auto',
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,pdf}'],
+          cleanupOutdatedCaches: true,
+        },
+        includeAssets: [], // 暂时清空，防止找不到资源报错
         manifest: {
           name: '合拍',
           short_name: '合拍',
