@@ -1,7 +1,8 @@
-import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown, Radio } from 'lucide-react';
+import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown, Radio, Server } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService, Setlist } from '../services/storageService';
+import { getServerUrl, setServerUrl } from '../services/apiService';
 
 interface SettingsViewProps {
   isAdmin: boolean;
@@ -25,6 +26,8 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
   const [pedalConfig, setPedalConfig] = useState<any>({ nextPageKeys: ['ArrowRight', 'PageDown'], prevPageKeys: ['ArrowLeft', 'PageUp'], enabled: true });
   const [isRecordingKey, setIsRecordingKey] = useState<'next' | 'prev' | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [serverUrl, setServerUrlInput] = useState(getServerUrl());
+  const [isEditingServer, setIsEditingServer] = useState(false);
 
   useEffect(() => {
     if (userProfile?.avatar instanceof Blob) {
@@ -34,6 +37,15 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
     }
     setAvatarUrl(null);
   }, [userProfile?.avatar]);
+
+  const handleUpdateServer = () => {
+    if (!serverUrl.startsWith('http')) {
+      return showMessage('请输入正确的地址 (以 http:// 开头)', 'error');
+    }
+    setServerUrl(serverUrl);
+    showMessage('服务器地址已更新，正在重新连接...');
+    setIsEditingServer(false);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -309,6 +321,53 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
 
         {/* Storage & Security */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Server className="text-primary w-5 h-5" />
+              <h2 className="font-headline font-bold text-xl tracking-tight">服务器连接 (APP端)</h2>
+            </div>
+            <div className="bg-surface-container-high rounded-2xl p-6 border border-outline-variant/10 space-y-4">
+              <div>
+                <p className="font-bold text-on-background">NAS 服务器地址</p>
+                <p className="text-xs text-on-background/50 mb-4">设置您的群晖访问地址，例如 http://192.168.1.5:3001</p>
+                
+                {isEditingServer ? (
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={serverUrl}
+                      onChange={(e) => setServerUrlInput(e.target.value)}
+                      placeholder="http://..."
+                      className="flex-1 bg-background border border-primary/30 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
+                    />
+                    <button 
+                      onClick={handleUpdateServer}
+                      className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold"
+                    >
+                      保存
+                    </button>
+                    <button 
+                      onClick={() => { setIsEditingServer(false); setServerUrlInput(getServerUrl()); }}
+                      className="bg-surface-container text-on-background/50 px-4 py-2 rounded-xl text-xs font-bold"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 bg-background/50 rounded-xl border border-outline-variant/10">
+                    <code className="text-xs text-primary font-mono">{getServerUrl() || '未设置 (默认指向当前网页)'}</code>
+                    <button 
+                      onClick={() => setIsEditingServer(true)}
+                      className="text-primary hover:underline font-bold text-xs"
+                    >
+                      修改
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <Database className="text-primary w-5 h-5" />

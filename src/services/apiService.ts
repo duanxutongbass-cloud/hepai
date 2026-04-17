@@ -1,11 +1,23 @@
 import axios from 'axios';
 
-// 基础链接：开发环境指向本地，生产环境指向群晖 NAS IP/域名
-const API_BASE = import.meta.env.VITE_API_URL || '';
+// 基础链接：现在已为您量身定制，默认直接连接您的群晖域名
+const DEFAULT_DOMAIN = 'http://dxtbass.huazo.xyz:3001';
+let API_BASE = localStorage.getItem('nocturne_server_url') || DEFAULT_DOMAIN;
 
 const api = axios.create({
   baseURL: API_BASE,
 });
+
+// 提供一个方法允许设置服务器地址 (保留灵活性)
+export const setServerUrl = (url: string) => {
+  const formattedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+  localStorage.setItem('nocturne_server_url', formattedUrl);
+  API_BASE = formattedUrl;
+  api.defaults.baseURL = formattedUrl;
+  window.location.reload();
+};
+
+export const getServerUrl = () => API_BASE;
 
 // 请求拦截器：自动注入 Token
 api.interceptors.request.use((config) => {
@@ -20,7 +32,8 @@ export const apiService = {
   // 获取文件绝对路径
   getFileUrl: (path: string) => {
     if (!path) return '';
-    return `${API_BASE}/${path.replace(/\\/g, '/')}`;
+    const baseUrl = getServerUrl();
+    return `${baseUrl}/${path.replace(/\\/g, '/')}`;
   },
 
   // 认证相关
@@ -37,7 +50,7 @@ export const apiService = {
     }),
   },
   
-  // 元数据同步 (Zustand 级别同步)
+  // 元数据同步
   metadata: {
     get: (key: string) => api.get(`/api/metadata/${key}`),
     save: (key: string, value: any) => api.post('/api/metadata', { key, value }),
