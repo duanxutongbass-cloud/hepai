@@ -2,12 +2,12 @@ version: '3.8'
 
 services:
   nocturne-app:
-    image: node:20-alpine
+    image: node:22-alpine
     container_name: nocturne-sync-server
     # 自动重启，确保排练时服务器挂了能秒回
     restart: always
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       # 将代码文件夹挂载到容器中
       - .:/app
@@ -16,18 +16,15 @@ services:
     working_dir: /app
     environment:
       - NODE_ENV=production
-      # --- 以下信息请根据您的 NAS 实际情况在部署时修改 ---
-      - DB_HOST=192.168.1.100  # 填入您群晖的局域网 IP
+      # --- 已根据您的要求设置永久参数 ---
+      - DB_HOST=192.168.31.250  # 您的 NAS 固定 IP
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=your_password
+      - DB_PASSWORD=A9878480a！
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
-    # 启动命令：
-    # 1. 安装所有依赖（包含 tsx）
-    # 2. 编译前端代码（生成 dist 文件夹）
-    # 3. 运行后端服务器
-    command: sh -c "npm install && npm run build && npm start"
+    # 启动命令：集成国内镜像、强制依赖安装及编译
+    command: sh -c "npm config set registry https://registry.npmmirror.com && npm install --include=dev --legacy-peer-deps && npm run build && npm start"
 
 networks:
   default:
