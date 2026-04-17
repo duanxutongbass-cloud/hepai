@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  nocturne-app:
+    image: node:20-alpine
+    container_name: nocturne-sync-server
+    # 自动重启，确保排练时服务器挂了能秒回
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      # 将代码文件夹挂载到容器中
+      - .:/app
+      # 确保乐谱存储目录持久化
+      - ./uploads:/app/uploads
+    working_dir: /app
+    environment:
+      - NODE_ENV=production
+      # --- 以下信息请根据您的 NAS 实际情况在部署时修改 ---
+      - DB_HOST=192.168.1.100  # 填入您群晖的局域网 IP
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=your_password
+      - DB_NAME=nocturne_sync
+      - JWT_SECRET=nocturne_reader_secret_key
+    # 启动命令：安装依赖并运行服务器
+    command: sh -c "npm install --production && npx tsx server/index.ts"
+
+networks:
+  default:
+    name: nocturne-network

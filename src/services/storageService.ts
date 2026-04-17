@@ -1,4 +1,5 @@
 import { openDB, IDBPDatabase } from 'idb';
+import { apiService } from './apiService';
 
 const DB_NAME = 'nocturne-db';
 const STORE_NAME = 'scores';
@@ -17,7 +18,8 @@ export interface PlacedObject {
 export interface ScorePart {
   id: string;
   name: string;
-  blob: Blob;
+  blob?: Blob;
+  cloudUrl?: string; // URL on NAS
   assignedTo?: string[]; // Roles like 'Violin I', 'Cello'
   pendingRequests?: string[]; // User IDs requesting access
   tags?: string[];
@@ -32,7 +34,8 @@ export interface ScoreData {
   folder?: string; // Folder name
   isFavorite?: boolean;
   lastViewedAt?: number;
-  blob: Blob; // Main/Full score
+  blob?: Blob; // Main/Full score
+  cloudUrl?: string; // URL on NAS
   audioBlob?: Blob; // Recording
   coverBlob?: Blob; // Cover image
   type: 'single' | 'collection'; // Single part vs Collection of parts
@@ -212,20 +215,32 @@ export const storageService = {
 
   async saveMetadata(meta: Partial<AppMetadata>) {
     const db = await getDB();
-    if (meta.roles) await db.put(META_STORE, meta.roles, 'roles');
-    if (meta.partTags) await db.put(META_STORE, meta.partTags, 'partTags');
-    if (meta.folders) await db.put(META_STORE, meta.folders, 'folders');
-    if (meta.program) await db.put(META_STORE, meta.program, 'program');
-    if (meta.setlists) await db.put(META_STORE, meta.setlists, 'setlists');
-    if (meta.activeSetlistId !== undefined) await db.put(META_STORE, meta.activeSetlistId, 'activeSetlistId');
-    if (meta.syncState) await db.put(META_STORE, meta.syncState, 'syncState');
-    if (meta.roleRequests) await db.put(META_STORE, meta.roleRequests, 'roleRequests');
-    if (meta.groups) await db.put(META_STORE, meta.groups, 'groups');
-    if (meta.activeGroupId !== undefined) await db.put(META_STORE, meta.activeGroupId, 'activeGroupId');
-    if (meta.chatHistory) await db.put(META_STORE, meta.chatHistory, 'chatHistory');
-    if (meta.userRole) await db.put(META_STORE, meta.userRole, 'userRole');
-    if (meta.profile) await db.put(META_STORE, meta.profile, 'profile');
-    if (meta.pedalConfig) await db.put(META_STORE, meta.pedalConfig, 'pedalConfig');
-    if (meta.readerSettings) await db.put(META_STORE, meta.readerSettings, 'readerSettings');
+    const isLoggedIn = !!localStorage.getItem('nocturne_token');
+
+    const saveAndSync = async (key: string, value: any) => {
+      await db.put(META_STORE, value, key);
+      if (isLoggedIn) {
+        apiService.metadata.save(key, value).catch(console.error);
+      }
+    };
+
+    if (meta.roles !== undefined) await saveAndSync('roles', meta.roles);
+    if (meta.partTags !== undefined) await saveAndSync('partTags', meta.partTags);
+    if (meta.folders !== undefined) await saveAndSync('folders', meta.folders);
+    if (meta.program !== undefined) await saveAndSync('program', meta.program);
+    if (meta.setlists !== undefined) await saveAndSync('setlists', meta.setlists);
+    if (meta.activeSetlistId !== undefined) await saveAndSync('activeSetlistId', meta.activeSetlistId);
+    if (meta.syncState !== undefined) await saveAndSync('syncState', meta.syncState);
+    if (meta.roleRequests !== undefined) await saveAndSync('roleRequests', meta.roleRequests);
+    if (meta.groups !== undefined) await saveAndSync('groups', meta.groups);
+    if (meta.activeGroupId !== undefined) await saveAndSync('activeGroupId', meta.activeGroupId);
+    if (meta.chatHistory !== undefined) await saveAndSync('chatHistory', meta.chatHistory);
+    if (meta.userRole !== undefined) await saveAndSync('userRole', meta.userRole);
+    if (meta.profile !== undefined) await saveAndSync('profile', meta.profile);
+    if (meta.pedalConfig !== undefined) await saveAndSync('pedalConfig', meta.pedalConfig);
+    if (meta.readerSettings !== undefined) await saveAndSync('readerSettings', meta.readerSettings);
+    if (meta.folderCovers !== undefined) await saveAndSync('folderCovers', meta.folderCovers);
+    if (meta.folderAliases !== undefined) await saveAndSync('folderAliases', meta.folderAliases);
+    if (meta.notifications !== undefined) await saveAndSync('notifications', meta.notifications);
   }
 };

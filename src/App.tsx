@@ -15,11 +15,13 @@ import SettingsView from './components/SettingsView';
 import ReaderView from './components/ReaderView';
 import BottomNav from './components/BottomNav';
 import ProfileView from './components/ProfileView';
+import AuthView from './components/AuthView';
+import { apiService } from './services/apiService';
 
 import RecentPerformancesView from './components/RecentPerformancesView';
 import { storageService } from './services/storageService';
 
-export type View = 'library' | 'setlist' | 'sync' | 'settings' | 'reader' | 'recent' | 'profile';
+export type View = 'library' | 'setlist' | 'sync' | 'settings' | 'reader' | 'recent' | 'profile' | 'auth';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>('library');
@@ -38,7 +40,26 @@ export default function App() {
 
   useEffect(() => {
     const loadInitial = async () => {
-      const meta = await storageService.getMetadata();
+      const isLoggedIn = !!localStorage.getItem('nocturne_token');
+      let meta = await storageService.getMetadata();
+
+      if (isLoggedIn) {
+        try {
+          // Sync some core keys from cloud
+          const keys: (keyof any)[] = ['folders', 'roles', 'partTags', 'userRole', 'profile'];
+          for (const key of keys) {
+            const cloudVal = await apiService.metadata.get(key as string);
+            if (cloudVal.data) {
+              await storageService.saveMetadata({ [key]: cloudVal.data });
+            }
+          }
+          // Reload local meta
+          meta = await storageService.getMetadata();
+        } catch (err) {
+          console.error('Failed to sync cloud metadata:', err);
+        }
+      }
+
       setIsAdmin(meta.userRole === 'admin' || meta.userRole === 'sub-admin');
       setUserProfile(meta.profile);
 
@@ -60,8 +81,13 @@ export default function App() {
   const handleSetIsAdmin = async (val: boolean) => {
     setIsAdmin(val);
     await storageService.saveMetadata({ userRole: val ? 'admin' : 'member' });
-    // Notify other components via BroadcastChannel if needed, 
-    // but SyncView already listens to metadata or initialIsAdmin
+  };
+
+  const handleLogout = async () => {
+    console.log('Logging out...');
+    setUserProfile(null);
+    await storageService.saveMetadata({ profile: null as any });
+    setCurrentView('library');
   };
 
   useEffect(() => {
@@ -69,6 +95,7 @@ export default function App() {
     channel.onmessage = (event) => {
       const { type, data } = event.data;
       if (type === 'PUSH_SCORE' && !isAdmin) {
+        console.log('Received pushed score:', data.scoreId);
         handleOpenScore(data.scoreId, true);
       }
     };
@@ -109,6 +136,20 @@ export default function App() {
               <ProfileView 
                 onBack={() => setCurrentView(previousView)} 
                 onViewChange={setCurrentView} 
+                userProfile={userProfile}
+                onLogout={handleLogout}
+              />
+            )}
+            {currentView === 'auth' && (
+              <AuthView 
+                onBack={() => setCurrentView(previousView)}
+                onSuccess={async (user) => {
+                  console.log('Login success, updating profile...', user);
+                  setUserProfile(user);
+                  await storageService.saveMetadata({ profile: user });
+                  console.log('Metadata saved, switching to profile view');
+                  setCurrentView('profile');
+                }}
               />
             )}
             {currentView === 'settings' && (

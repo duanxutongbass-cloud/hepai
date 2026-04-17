@@ -4,11 +4,12 @@ import { ChevronLeft, ChevronRight, Edit3, Highlighter, Eraser, Mic, Layers, Tra
 import { Document, Page, pdfjs } from 'react-pdf';
 import CanvasDraw from 'react-canvas-draw';
 import { storageService, ScoreData, PlacedObject } from '../services/storageService';
+import { apiService } from '../services/apiService';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Set up PDF.js worker
+// Set up PDF.js worker - Use a more robust way to load the worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ReaderViewProps {
@@ -247,8 +248,21 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
       const saved = await storageService.getScore(scoreId);
       if (saved) {
         setScoreData(saved);
-        setPdfFile(saved.blob);
-        setIsOffline(true);
+        if (saved.blob) {
+          setPdfFile(saved.blob);
+          setIsOffline(true);
+        } else if (saved.cloudUrl) {
+          setPdfFile(apiService.getFileUrl(saved.cloudUrl));
+          setIsOffline(false);
+          // Try to cache it locally in background
+          fetch(apiService.getFileUrl(saved.cloudUrl))
+            .then(res => res.blob())
+            .then(blob => {
+              storageService.saveScore({ ...saved, blob });
+            })
+            .catch(console.error);
+        }
+        
         if (saved.annotations && saved.annotations[1] && canvasRef.current) {
           canvasRef.current.loadSaveData(saved.annotations[1], true);
         }
@@ -330,9 +344,18 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
     if (!scoreData) return;
     setCurrentPartIndex(index);
     if (index === -1) {
-      setPdfFile(scoreData.blob);
+      if (scoreData.blob) {
+        setPdfFile(scoreData.blob);
+      } else if (scoreData.cloudUrl) {
+        setPdfFile(apiService.getFileUrl(scoreData.cloudUrl));
+      }
     } else {
-      setPdfFile(scoreData.parts![index].blob);
+      const part = scoreData.parts![index];
+      if (part.blob) {
+        setPdfFile(part.blob);
+      } else if (part.cloudUrl) {
+        setPdfFile(apiService.getFileUrl(part.cloudUrl));
+      }
     }
     setPageNumber(1);
     if (canvasRef.current) canvasRef.current.clear();
@@ -863,7 +886,23 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
             <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-on-background/40 uppercase tracking-widest">
               <span>{currentPartIndex === -1 ? '总谱' : scoreData?.parts[currentPartIndex].name}</span>
               <span>•</span>
-              <span>P.{pageNumber} / {numPages}</span>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={pageNumber <= 1}
+                  onClick={(e) => { e.stopPropagation(); setPageNumber(prev => Math.max(1, prev - 1)); }}
+                  className="p-0.5 hover:bg-primary/10 rounded disabled:opacity-20"
+                >
+                  <ChevronLeft className="w-3 h-3" />
+                </button>
+                <span>P.{pageNumber} / {numPages}</span>
+                <button 
+                  disabled={pageNumber >= numPages}
+                  onClick={(e) => { e.stopPropagation(); setPageNumber(prev => Math.min(numPages, prev + 1)); }}
+                  className="p-0.5 hover:bg-primary/10 rounded disabled:opacity-20"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1031,39 +1070,70 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
               )}
               
               {/* PDF Layer */}
+              {/* Tap to toggle UI zone */}
+              <div 
+                className="absolute inset-0 z-30"
+                onClick={() => setShowUI(!showUI)}
+              />
+
               <div className={`absolute inset-0 z-0 flex items-center justify-center gap-4 transition-transform duration-500 ${isSmartCrop ? 'scale-[1.15]' : 'scale-100'}`}>
                 {pdfUrl && (
                   <Document
                     file={pdfUrl}
+                    key={pdfUrl} // Force re-render only if URL changes
                     onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={(error) => console.error('PDF Load Error:', error)}
-                    loading={<Loader2 className="w-12 h-12 animate-spin text-primary" />}
-                    className="flex justify-center gap-4"
+                    onLoadError={(error) => {
+                      console.error('PDF Load Error:', error);
+                      // If it fails, try to re-generate the URL
+                      if (pdfFile instanceof Blob) {
+                        const newUrl = URL.createObjectURL(pdfFile);
+                        setPdfUrl(newUrl);
+                      }
+                    }}
+                    loading={
+                      <div className="flex flex-col items-center gap-4">
+                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                        <p className="text-xs font-bold text-primary/40 animate-pulse">正在加载乐谱...</p>
+                      </div>
+                    }
+                    error={
+                      <div className="flex flex-col items-center gap-4 p-8 bg-surface-container rounded-3xl border border-error/20">
+                        <ShieldAlert className="w-12 h-12 text-error" />
+                        <p className="text-sm font-bold text-error">乐谱加载失败</p>
+                        <button 
+                          onClick={() => window.location.reload()}
+                          className="px-6 py-2 bg-primary text-on-primary rounded-full text-xs font-bold"
+                        >
+                          重试
+                        </button>
+                      </div>
+                    }
+                    className="flex justify-center gap-8"
                   >
-                    {isTwoPageView && orientation === 'landscape' && pageNumber > 1 && (
-                      <Page 
-                        pageNumber={pageNumber - 1} 
-                        width={(isFullscreen ? window.innerWidth : containerWidth) * 0.45 * zoom}
-                        renderAnnotationLayer={false}
-                        renderTextLayer={false}
-                      />
-                    )}
-                    <Page 
-                      pageNumber={pageNumber} 
-                      width={(isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth) * (isTwoPageView && orientation === 'landscape' ? 0.45 : 1) * zoom}
-                      renderAnnotationLayer={false}
-                      renderTextLayer={false}
-                    />
-                    {/* Pre-render next page */}
-                    {pageNumber < numPages && (
-                      <div className="hidden">
+                    {isTwoPageView && orientation === 'landscape' ? (
+                      <>
                         <Page 
-                          pageNumber={pageNumber + 1} 
-                          width={(isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth) * (isTwoPageView && orientation === 'landscape' ? 0.45 : 1) * zoom}
+                          pageNumber={pageNumber} 
+                          width={(isFullscreen ? window.innerWidth * 0.9 : containerWidth) * 0.45 * zoom}
                           renderAnnotationLayer={false}
                           renderTextLayer={false}
                         />
-                      </div>
+                        {pageNumber + 1 <= numPages && (
+                          <Page 
+                            pageNumber={pageNumber + 1} 
+                            width={(isFullscreen ? window.innerWidth * 0.9 : containerWidth) * 0.45 * zoom}
+                            renderAnnotationLayer={false}
+                            renderTextLayer={false}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <Page 
+                        pageNumber={pageNumber} 
+                        width={(isFullscreen ? (orientation === 'landscape' ? window.innerWidth * 0.9 : window.innerWidth) : containerWidth) * zoom}
+                        renderAnnotationLayer={false}
+                        renderTextLayer={false}
+                      />
                     )}
                   </Document>
                 )}
@@ -1073,6 +1143,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
               <div className={`absolute inset-0 z-10 ${activeTool === 'stamp' || activeTool === 'text' || activeTool === 'select' ? 'pointer-events-none' : ''}`}>
                 <CanvasDraw
                   ref={canvasRef}
+                  saveData={scoreData?.annotations?.[pageNumber] || ""}
                   canvasWidth={isFullscreen ? window.innerWidth : containerWidth}
                   canvasHeight={isFullscreen ? window.innerHeight : canvasHeight}
                   brushColor={activeTool === 'highlight' ? hexToRgba(activeColor, 0.3) : activeColor}
@@ -1082,6 +1153,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
                   hideGrid={true}
                   className="cursor-crosshair"
                   onChange={handleCanvasChange}
+                  loadTimeOffset={0}
                 />
               </div>
 
@@ -1239,16 +1311,35 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
                   </button>
                 </div>
 
+                {pedalConfig?.enabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                      className="flex flex-col items-center gap-2 p-4 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
+                    >
+                      <ChevronLeft className="w-6 h-6 text-primary group-active:-translate-x-1 transition-transform" />
+                      <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">上一页</span>
+                    </button>
+                    <button 
+                      onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
+                      className="flex flex-col items-center gap-2 p-4 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
+                    >
+                      <ChevronRight className="w-6 h-6 text-primary group-active:translate-x-1 transition-transform" />
+                      <span className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest">下一页</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   <p className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest px-2">按键配置</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-surface-container rounded-xl">
                       <div className="text-[8px] font-bold text-on-background/30 uppercase mb-1">上一页</div>
-                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.prevPageKeys.join(', ')}</div>
+                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.prevPageKeys?.join(', ') || '未设置'}</div>
                     </div>
                     <div className="p-3 bg-surface-container rounded-xl">
                       <div className="text-[8px] font-bold text-on-background/30 uppercase mb-1">下一页</div>
-                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.nextPageKeys.join(', ')}</div>
+                      <div className="text-xs font-mono font-bold text-primary">{pedalConfig?.nextPageKeys?.join(', ') || '未设置'}</div>
                     </div>
                   </div>
                 </div>
@@ -1642,34 +1733,23 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           </button>
         )}
 
-        {/* Page Navigation Overlay */}
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${showUI ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
-          <div className="bg-surface-bright/90 backdrop-blur-xl px-6 py-3 rounded-full shadow-2xl border border-outline-variant/10 flex items-center gap-6">
-            <button 
-              disabled={pageNumber <= 1}
+        {/* Click-to-flip zones */}
+        {!isAnnotationPanelOpen && !isSymbolsPanelOpen && !isBluetoothPanelOpen && !isMetronomeOpen && !isPartsMenuOpen && !isDisplayMenuOpen && (
+          <>
+            <div 
               onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
-              className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <div className="flex flex-col items-center">
-              <span className="text-xs font-bold text-primary">第 {pageNumber} / {numPages} 页</span>
-              <div className="w-32 h-1 bg-outline-variant/20 rounded-full mt-1 overflow-hidden">
-                <div 
-                  className="h-full bg-primary transition-all duration-300" 
-                  style={{ width: `${(pageNumber / numPages) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-            <button 
-              disabled={pageNumber >= numPages}
+              className="fixed left-0 top-20 bottom-0 w-20 z-40 cursor-pointer"
+              title="上一页"
+            />
+            <div 
               onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
-              className="p-2 text-primary hover:bg-primary/10 rounded-full disabled:opacity-20 transition-all"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
+              className="fixed right-0 top-20 bottom-0 w-20 z-40 cursor-pointer"
+              title="下一页"
+            />
+          </>
+        )}
+
+        {/* Page Navigation Overlay - Removed floating bar to avoid blocking score */}
 
         {/* Audio Player Overlay */}
         {scoreData?.audioBlob && (
@@ -1700,41 +1780,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
           </div>
         )}
 
-        {/* Bluetooth Pedal Control Module */}
-        {pedalConfig?.enabled && (
-          <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 ${showUI ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
-            <div className="bg-surface-bright/90 backdrop-blur-xl p-4 rounded-3xl shadow-2xl border border-outline-variant/10 flex flex-col gap-3 min-w-[160px]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-primary animate-pulse" />
-                  <span className="text-[10px] font-bold text-on-background/60 uppercase tracking-widest">蓝牙踏板</span>
-                </div>
-                <div className="w-2 h-2 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]"></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
-                  className="flex flex-col items-center gap-1 p-3 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
-                >
-                  <ChevronLeft className="w-5 h-5 text-primary group-active:-translate-x-1 transition-transform" />
-                  <span className="text-[8px] font-bold text-on-background/40 uppercase">上一页</span>
-                </button>
-                <button 
-                  onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
-                  className="flex flex-col items-center gap-1 p-3 bg-surface-container hover:bg-primary/10 rounded-2xl transition-all group"
-                >
-                  <ChevronRight className="w-5 h-5 text-primary group-active:translate-x-1 transition-transform" />
-                  <span className="text-[8px] font-bold text-on-background/40 uppercase">下一页</span>
-                </button>
-              </div>
-              
-              <div className="text-[9px] text-center text-on-background/30 font-medium">
-                已绑定 {pedalConfig.nextPageKeys.length + pedalConfig.prevPageKeys.length} 个按键
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Bluetooth Pedal Control Module - Removed as requested, now integrated in panel */}
       </main>
     </div>
   );

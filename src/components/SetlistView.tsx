@@ -9,6 +9,140 @@ interface SetlistViewProps {
   onViewChange: (view: any) => void;
 }
 
+interface TrackItemProps {
+  track: ScoreData;
+  index: number;
+  draggedIndex: number | null;
+  setDraggedIndex: (index: number | null) => void;
+  handleMove: (index: number, direction: 'up' | 'down') => void;
+  onOpenScore: (scoreId: string) => void;
+  confirmingRemoveTrackId: string | null;
+  setConfirmingRemoveTrackId: (id: string | null) => void;
+  handleRemove: (id: string) => void;
+  totalTracks: number;
+}
+
+const TrackItem = ({
+  track,
+  index,
+  draggedIndex,
+  setDraggedIndex,
+  handleMove,
+  onOpenScore,
+  confirmingRemoveTrackId,
+  setConfirmingRemoveTrackId,
+  handleRemove,
+  totalTracks
+}: TrackItemProps) => {
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (track.coverBlob instanceof Blob) {
+      const url = URL.createObjectURL(track.coverBlob);
+      setCoverUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setCoverUrl(null);
+  }, [track.coverBlob]);
+
+  return (
+    <div 
+      draggable
+      onDragStart={() => setDraggedIndex(index)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => {
+        if (draggedIndex !== null && draggedIndex !== index) {
+          handleMove(draggedIndex, draggedIndex < index ? 'down' : 'up');
+        }
+        setDraggedIndex(null);
+      }}
+      className={`group flex items-center gap-4 bg-surface-container-high hover:bg-surface-bright transition-all duration-300 p-4 rounded-xl border-2 ${draggedIndex === index ? 'opacity-50 border-primary border-dashed' : 'border-transparent'}`}
+    >
+      <div className="flex items-center gap-2">
+        <div className="cursor-grab active:cursor-grabbing p-1">
+          <Menu className="w-4 h-4 text-outline-variant/30" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <button 
+            disabled={index === 0}
+            onClick={() => handleMove(index, 'up')}
+            className={`p-1 transition-all ${index === 0 ? 'opacity-0' : 'text-on-background/30 hover:text-primary'}`}
+          >
+            <ChevronUp className="w-4 h-4" />
+          </button>
+          <button 
+            disabled={index === totalTracks - 1}
+            onClick={() => handleMove(index, 'down')}
+            className={`p-1 transition-all ${index === totalTracks - 1 ? 'opacity-0' : 'text-on-background/30 hover:text-primary'}`}
+          >
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div 
+        onClick={() => onOpenScore(track.id)}
+        className="flex-grow flex items-center gap-4 cursor-pointer"
+      >
+        <div className="w-10 h-14 bg-surface-container-low rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
+          {coverUrl ? (
+            <img src={coverUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            <FileText className="text-primary/40 w-5 h-5" />
+          )}
+        </div>
+        <div>
+          <h4 className="font-headline text-lg font-semibold tracking-wide">{track.title}</h4>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-xs text-on-background/50">{track.composer || '未知作曲家'}</p>
+            {track.bpm && (
+              <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">
+                <Gauge className="w-3 h-3" /> {track.bpm}
+              </span>
+            )}
+            {track.key && (
+              <span className="flex items-center gap-1 text-[10px] bg-secondary/10 text-secondary px-1.5 py-0.5 rounded font-bold">
+                <Music className="w-3 h-3" /> {track.key}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        {confirmingRemoveTrackId === track.id ? (
+          <div className="flex items-center gap-1 bg-error/10 rounded-lg p-1 border border-error/20">
+            <button 
+              onClick={() => handleRemove(track.id)}
+              className="text-[10px] font-bold text-error px-2 py-1"
+            >
+              确认移除
+            </button>
+            <button 
+              onClick={() => setConfirmingRemoveTrackId(null)}
+              className="p-1 text-on-background/30"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmingRemoveTrackId(track.id);
+            }}
+            className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-all"
+            title="从节目单移除"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        )}
+        <GripVertical className="text-outline-variant/30" />
+      </div>
+    </div>
+  );
+};
+
 export default function SetlistView({ onOpenScore, isAdmin, onViewChange }: SetlistViewProps) {
   const [programScores, setProgramScores] = useState<ScoreData[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
@@ -29,7 +163,28 @@ export default function SetlistView({ onOpenScore, isAdmin, onViewChange }: Setl
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>('member');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [activeSetImageUrl, setActiveSetImageUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (userProfile?.avatar instanceof Blob) {
+      const url = URL.createObjectURL(userProfile.avatar);
+      setAvatarUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setAvatarUrl(null);
+  }, [userProfile?.avatar]);
+
+  useEffect(() => {
+    const activeSet = setlists.find(s => s.id === activeSetlistId);
+    if (activeSet?.imageBlob instanceof Blob) {
+      const url = URL.createObjectURL(activeSet.imageBlob);
+      setActiveSetImageUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setActiveSetImageUrl(null);
+  }, [activeSetlistId, setlists]);
 
   useEffect(() => {
     loadData();
@@ -252,8 +407,8 @@ export default function SetlistView({ onOpenScore, isAdmin, onViewChange }: Setl
               </div>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:border-primary transition-all overflow-hidden">
-              {userProfile?.avatar ? (
-                <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              {avatarUrl ? (
+                <img src={avatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 (userProfile?.name || '音')[0]
               )}
@@ -388,10 +543,10 @@ export default function SetlistView({ onOpenScore, isAdmin, onViewChange }: Setl
 
         {activeSet && (
           <div className="relative mb-12 overflow-hidden rounded-3xl bg-surface-container-low min-h-[320px] flex flex-col justify-end group shadow-2xl border border-outline-variant/10">
-            {activeSet.imageBlob ? (
+            {activeSetImageUrl ? (
               <div className="absolute inset-0">
                 <img 
-                  src={URL.createObjectURL(activeSet.imageBlob)} 
+                  src={activeSetImageUrl} 
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"
                 />
@@ -569,102 +724,20 @@ export default function SetlistView({ onOpenScore, isAdmin, onViewChange }: Setl
             programScores
               .filter(track => !showOnlyFavorites || track.isFavorite)
               .map((track, index) => (
-              <div 
-                key={track.id}
-                draggable
-                onDragStart={() => setDraggedIndex(index)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (draggedIndex !== null && draggedIndex !== index) {
-                    handleMove(draggedIndex, draggedIndex < index ? 'down' : 'up');
-                  }
-                  setDraggedIndex(null);
-                }}
-                className={`group flex items-center gap-4 bg-surface-container-high hover:bg-surface-bright transition-all duration-300 p-4 rounded-xl border-2 ${draggedIndex === index ? 'opacity-50 border-primary border-dashed' : 'border-transparent'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="cursor-grab active:cursor-grabbing p-1">
-                    <Menu className="w-4 h-4 text-outline-variant/30" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <button 
-                      disabled={index === 0}
-                      onClick={() => handleMove(index, 'up')}
-                      className={`p-1 transition-all ${index === 0 ? 'opacity-0' : 'text-on-background/30 hover:text-primary'}`}
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button 
-                      disabled={index === programScores.length - 1}
-                      onClick={() => handleMove(index, 'down')}
-                      className={`p-1 transition-all ${index === programScores.length - 1 ? 'opacity-0' : 'text-on-background/30 hover:text-primary'}`}
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div 
-                  onClick={() => onOpenScore(track.id)}
-                  className="flex-grow flex items-center gap-4 cursor-pointer"
-                >
-                  <div className="w-10 h-14 bg-surface-container-low rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
-                    {track.coverBlob ? (
-                      <img src={URL.createObjectURL(track.coverBlob)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <FileText className="text-primary/40 w-5 h-5" />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-headline text-lg font-semibold tracking-wide">{track.title}</h4>
-                    <div className="flex items-center gap-3 mt-1">
-                      <p className="text-xs text-on-background/50">{track.composer || '未知作曲家'}</p>
-                      {track.bpm && (
-                        <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">
-                          <Gauge className="w-3 h-3" /> {track.bpm}
-                        </span>
-                      )}
-                      {track.key && (
-                        <span className="flex items-center gap-1 text-[10px] bg-secondary/10 text-secondary px-1.5 py-0.5 rounded font-bold">
-                          <Music className="w-3 h-3" /> {track.key}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  {confirmingRemoveTrackId === track.id ? (
-                    <div className="flex items-center gap-1 bg-error/10 rounded-lg p-1 border border-error/20">
-                      <button 
-                        onClick={() => handleRemove(track.id)}
-                        className="text-[10px] font-bold text-error px-2 py-1"
-                      >
-                        确认移除
-                      </button>
-                      <button 
-                        onClick={() => setConfirmingRemoveTrackId(null)}
-                        className="p-1 text-on-background/30"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmingRemoveTrackId(track.id);
-                      }}
-                      className="p-2 text-error/40 hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                      title="从节目单移除"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
-                  <GripVertical className="text-outline-variant/30" />
-                </div>
-              </div>
-            ))
+                <TrackItem 
+                  key={track.id}
+                  track={track}
+                  index={index}
+                  draggedIndex={draggedIndex}
+                  setDraggedIndex={setDraggedIndex}
+                  handleMove={handleMove}
+                  onOpenScore={onOpenScore}
+                  confirmingRemoveTrackId={confirmingRemoveTrackId}
+                  setConfirmingRemoveTrackId={setConfirmingRemoveTrackId}
+                  handleRemove={handleRemove}
+                  totalTracks={programScores.length}
+                />
+              ))
           )}
         </div>
       </main>

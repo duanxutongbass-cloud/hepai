@@ -24,6 +24,16 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pedalConfig, setPedalConfig] = useState<any>({ nextPageKeys: ['ArrowRight', 'PageDown'], prevPageKeys: ['ArrowLeft', 'PageUp'], enabled: true });
   const [isRecordingKey, setIsRecordingKey] = useState<'next' | 'prev' | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (userProfile?.avatar instanceof Blob) {
+      const url = URL.createObjectURL(userProfile.avatar);
+      setAvatarUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setAvatarUrl(null);
+  }, [userProfile?.avatar]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -189,8 +199,8 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
             className="flex items-center gap-3 pl-4 border-l border-outline-variant/10 cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20 group-hover:bg-primary group-hover:text-on-primary transition-all overflow-hidden">
-              {userProfile?.avatar instanceof Blob ? (
-                <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              {avatarUrl ? (
+                <img src={avatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 (userProfile?.name || '音')[0]
               )}
@@ -209,8 +219,8 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange }: Sett
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="relative">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl sm:text-3xl border-2 border-primary/20 shadow-inner overflow-hidden">
-                  {userProfile?.avatar instanceof Blob ? (
-                    <img src={URL.createObjectURL(userProfile.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  {avatarUrl ? (
+                    <img src={avatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     (userProfile?.name || '音')[0]
                   )}
