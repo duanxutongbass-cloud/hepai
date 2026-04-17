@@ -23,8 +23,11 @@ services:
       - DB_PASSWORD=your_password
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
-    # 启动命令：安装依赖并运行服务器
-    command: sh -c "npm install --production && npx tsx server/index.ts"
+    # 启动命令：
+    # 1. 安装所有依赖（包含 tsx）
+    # 2. 编译前端代码（生成 dist 文件夹）
+    # 3. 运行后端服务器
+    command: sh -c "npm install && npm run build && npm start"
 
 networks:
   default:

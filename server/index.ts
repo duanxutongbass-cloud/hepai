@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
 import authRoutes from './routes/auth.js';
 import scoreRoutes from './routes/scores.js';
 import metadataRoutes from './routes/metadata.js';
@@ -13,6 +14,12 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // 确保 uploads 目录存在
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
 
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
