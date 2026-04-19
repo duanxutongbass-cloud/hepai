@@ -4,7 +4,7 @@ services:
   nocturne-app:
     image: node:22-alpine
     container_name: nocturne-sync-server
-    user: root  # 强制以 root 运行，解决群晖权限导致的路径解析失败
+    user: root
     restart: always
     ports:
       - "3001:3000"
@@ -14,14 +14,27 @@ services:
     working_dir: /app
     environment:
       - NODE_ENV=production
-      - DB_HOST=192.168.31.250
+      - DB_HOST=192.168.31.250     # NAS IP
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=A9878480a！
+      - DB_PASSWORD=A9878480a！    # 数据库密码
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
-    # 终极启动指令：检查文件 -> 清理冲突 -> 安装 -> 编译
-    command: sh -c "ls -R /app/src && npm config set registry https://registry.npmmirror.com && npm install --include=dev --legacy-peer-deps && npm run build && npm start"
+    # 终极修复逻辑：
+    # 1. 打印当前目录结构（确保文件上传正确）
+    # 2. 设置 npm 镜像加速
+    # 3. 安装依赖（强制包含构建工具）
+    # 4. 执行构建
+    # 5. 启动服务
+    command: >
+      sh -c "
+      echo '--- 正在检查文件结构 ---' &&
+      ls -F &&
+      ls -F src/ &&
+      npm config set registry https://registry.npmmirror.com &&
+      npm install --include=dev --legacy-peer-deps &&
+      npm run build &&
+      npm start"
 
 networks:
   default:
