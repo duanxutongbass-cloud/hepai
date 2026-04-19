@@ -103,15 +103,15 @@ export default function App() {
   }, [isAdmin]);
 
   return (
-    <div className="min-h-screen bg-background text-on-background font-body flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background text-white font-sans flex flex-col overflow-hidden">
       <main className="flex-1 relative overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentView}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="h-full w-full overflow-y-auto custom-scrollbar"
           >
             {currentView === 'library' && (

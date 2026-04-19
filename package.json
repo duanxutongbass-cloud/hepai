@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "python main.py",
+    "dev": "tsx server/index.ts",
     "build": "vite build",
-    "start": "python main.py",
+    "start": "tsx server/index.ts",
+    "dev:python": "npm run build && python main.py",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

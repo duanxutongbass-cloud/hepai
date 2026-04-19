@@ -33,7 +33,7 @@ export default function BottomNav({ currentView, onViewChange }: BottomNavProps)
   ];
 
   return (
-    <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-4 sm:pb-6 pt-2 bg-background/90 backdrop-blur-xl border-t border-outline-variant/15 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.12)]">
+    <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 bg-black/80 backdrop-blur-2xl border-t border-white/5 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)]">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
@@ -42,17 +42,17 @@ export default function BottomNav({ currentView, onViewChange }: BottomNavProps)
             key={item.id}
             onClick={() => onViewChange(item.id as View)}
             className={`flex flex-col items-center justify-center transition-all relative group ${
-              isActive ? 'text-secondary' : 'text-on-background/50 hover:text-tertiary'
+              isActive ? 'text-primary' : 'text-white/30 hover:text-white'
             }`}
           >
             {isActive && (
-              <div className="absolute -left-2 w-1 h-4 bg-primary rounded-full" />
+              <div className="absolute top-[-14px] w-8 h-[2px] bg-primary shadow-[0_0_10px_var(--color-primary-glow)]" />
             )}
-            <Icon className={`w-6 h-6 ${isActive ? 'fill-secondary/20' : ''}`} />
+            <Icon className={`w-5 h-5 mb-1 ${isActive ? 'scale-110' : ''}`} />
             {item.hasBadge && (
-              <span className="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border border-background" />
+              <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-secondary rounded-full border border-black shadow-[0_0_8px_rgba(255,112,67,0.5)]" />
             )}
-            <span className="text-[10px] font-semibold tracking-wider uppercase mt-1">
+            <span className="mono-label !text-[8px]">
               {item.label}
             </span>
           </button>

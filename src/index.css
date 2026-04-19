@@ -1,36 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-headline: "Space Grotesk", sans-serif;
-  --font-body: "Inter", sans-serif;
-
-  --color-background: #040a2f;
-  --color-on-background: #e2e4ff;
-  --color-primary: #89acff;
-  --color-on-primary: #002b6a;
-  --color-secondary: #ff7520;
-  --color-on-secondary: #3c1400;
-  --color-tertiary: #81ecff;
-  --color-on-tertiary: #003840;
+  --color-background: #04091a;
+  --color-surface: #0a1128;
+  --color-surface-bright: #121b3d;
+  --color-primary: #4f70ff;
+  --color-primary-glow: rgba(79, 112, 255, 0.4);
+  --color-secondary: #ff7043;
   
-  --color-surface-container: #0c1542;
-  --color-surface-container-low: #070f38;
-  --color-surface-container-high: #111b4c;
-  --color-surface-bright: #1c2760;
-  --color-outline: #6c739d;
-  --color-outline-variant: #3f456c;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 @layer base {
   body {
-    @apply bg-background text-on-background font-body;
+    @apply bg-background text-white antialiased selection:bg-primary/30;
   }
 }
 
+.hardware-card {
+  @apply bg-surface border border-white/5 rounded-2xl shadow-2xl transition-all duration-300;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+}
+
+.hardware-card:hover {
+  @apply border-primary/30 bg-surface-bright;
+  box-shadow: 0 0 20px -5px var(--color-primary-glow);
+}
+
+.mono-label {
+  @apply font-mono text-[10px] uppercase tracking-widest text-white/40;
+}
+
 .glass-panel {
-  background: rgba(17, 27, 76, 0.4);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(63, 69, 108, 0.15);
+  background: rgba(10, 17, 40, 0.7);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .sheet-canvas {

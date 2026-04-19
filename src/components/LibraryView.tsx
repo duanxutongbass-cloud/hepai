@@ -115,7 +115,7 @@ const ScoreCard = ({
     return (
       <div 
         key={score.id}
-        className="bg-surface-container-high p-3 rounded-xl flex items-center justify-between group hover:bg-surface-bright transition-all cursor-pointer border border-outline-variant/5 hover:border-primary/20 shadow-sm"
+        className="hardware-card p-3 flex items-center justify-between group cursor-pointer"
       >
         <div className="flex gap-4 items-center flex-1" onClick={() => handleOpenScore(score.id)}>
           <div className="w-10 h-12 bg-surface-container-low rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
@@ -127,16 +127,16 @@ const ScoreCard = ({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="font-bold text-on-background truncate">{score.title}</h4>
+              <h4 className="font-bold text-white truncate">{score.title}</h4>
               {score.cloudUrl && (
-                <Cloud className="w-3 h-3 text-primary/40" />
+                <Cloud className="w-3 h-3 text-primary/60" />
               )}
               {score.type === 'collection' && (
-                <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] font-bold rounded uppercase">合订本</span>
+                <span className="px-1.5 py-0.5 bg-primary/20 text-primary-light text-[8px] font-bold rounded uppercase border border-primary/30">合订本</span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-on-background/50">
-              <span className="font-medium">{score.composer || '未知作曲家'}</span>
+            <div className="flex items-center gap-3 mono-label">
+              <span className="font-medium text-white/60">{score.composer || '未知作曲家'}</span>
               <span>•</span>
               <span className="uppercase tracking-widest">{score.folder || '未分类'}</span>
               {score.duration && (
@@ -241,7 +241,7 @@ const ScoreCard = ({
     <div 
       key={score.id}
       onClick={() => handleOpenScore(score.id)}
-      className="bg-surface-container-high rounded-3xl group cursor-pointer border border-outline-variant/10 hover:border-primary/30 transition-all shadow-sm hover:shadow-xl flex flex-col"
+      className="hardware-card group cursor-pointer flex flex-col overflow-hidden"
       style={{ zIndex: activeMenuId === score.id ? 100 : 1 }}
     >
       <div className="aspect-[3/4] bg-surface-container-low relative">
@@ -295,15 +295,15 @@ const ScoreCard = ({
           </div>
         )}
       </div>
-      <div className="p-4">
-        <h4 className="font-headline font-bold text-on-background truncate mb-0.5">{score.title}</h4>
-        <p className="text-xs text-on-background/50 truncate mb-2">{score.composer || '未知'}</p>
+      <div className="p-4 bg-surface/50 backdrop-blur-sm border-t border-white/5">
+        <h4 className="font-sans font-bold text-white truncate mb-0.5 group-hover:text-primary transition-colors">{score.title}</h4>
+        <p className="text-xs text-white/40 truncate mb-2 mono-label">{score.composer || '未知'}</p>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-primary/60 uppercase tracking-tighter">
+          <span className="mono-label text-primary/80">
             {score.folder || '未分类'}
           </span>
           {score.duration && (
-            <span className="text-[10px] font-mono text-on-background/30">
+            <span className="text-[10px] font-mono text-white/20">
               {Math.floor(score.duration / 60)}:{(score.duration % 60).toString().padStart(2, '0')}
             </span>
           )}
@@ -1100,7 +1100,11 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     );
 
   return (
-    <div className="pb-24 min-h-screen bg-background">
+    <div className="pb-24 min-h-screen bg-background relative overflow-hidden">
+      {/* Dramatic Atmospheric Backgrounds */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-secondary/10 blur-[100px] rounded-full pointer-events-none" />
+      
       {/* Batch Actions Bar */}
       <AnimatePresence>
         {isMultiSelectMode && selectedScoreIds.size > 0 && (

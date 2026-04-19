@@ -11,7 +11,7 @@ services:
       - "4000:3000"
     environment:
       - NODE_ENV=production
-      - DB_HOST=192.168.31.250     # NAS IP
+      - DB_HOST=192.168.31.250     # 您的群晖 NAS IP
       - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=A9878480a！    # 数据库密码
@@ -26,10 +26,10 @@ services:
       apt-get update && apt-get install -y python3 python3-pip &&
       echo '--- 正在安装后端依赖 ---' &&
       pip3 install -r requirements.txt --break-system-packages &&
-      echo '--- 正在构建前端 (注入灵魂) ---' &&
-      npm install --include=dev &&
+      echo '--- 正在构建前端灵魂 ---' &&
+      npm install &&
       npm run build &&
-      echo '--- 服务启动中 ---' &&
+      echo '--- FastAPI + React 服务启动中 ---' &&
       python3 main.py"
 
 networks:

@@ -28,31 +28,39 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// 响应拦截器：自动解包获取 data，简化组件逻辑
+api.interceptors.response.use((response) => {
+  return response.data;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 export const apiService = {
   // 获取文件绝对路径
   getFileUrl: (path: string) => {
     if (!path) return '';
+    if (path.startsWith('http')) return path;
     const baseUrl = getServerUrl();
     return `${baseUrl}/${path.replace(/\\/g, '/')}`;
   },
 
   // 认证相关
   auth: {
-    login: (credentials: any) => api.post('/api/auth/login', credentials),
-    register: (userData: any) => api.post('/api/auth/register', userData),
+    login: (credentials: any) => api.post('/api/auth/login', credentials) as Promise<any>,
+    register: (userData: any) => api.post('/api/auth/register', userData) as Promise<any>,
   },
   
   // 乐谱管理
   scores: {
-    list: () => api.get('/api/scores'),
+    list: () => api.get('/api/scores') as Promise<any>,
     upload: (formData: FormData) => api.post('/api/scores', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
-    }),
+    }) as Promise<any>,
   },
   
   // 元数据同步
   metadata: {
-    get: (key: string) => api.get(`/api/metadata/${key}`),
-    save: (key: string, value: any) => api.post('/api/metadata', { key, value }),
+    get: (key: string) => api.get(`/api/metadata/${key}`) as Promise<any>,
+    save: (key: string, value: any) => api.post('/api/metadata', { key, value }) as Promise<any>,
   }
 };
