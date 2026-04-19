@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// 基础链接：现在已为您量身定制，默认直接连接您的群晖域名
-const DEFAULT_DOMAIN = 'http://dxtbass.huazo.xyz:3001';
+// 基础链接：自动识别当前环境地址。如果在 NAS 上，它会自动使用您访问的 4000 端口
+const DEFAULT_DOMAIN = window.location.origin;
 let API_BASE = localStorage.getItem('nocturne_server_url') || DEFAULT_DOMAIN;
 
 const api = axios.create({
