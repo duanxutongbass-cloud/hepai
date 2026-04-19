@@ -27,7 +27,7 @@ services:
       echo '--- 正在安装后端依赖 ---' &&
       pip3 install -r requirements.txt --break-system-packages &&
       echo '--- 正在构建前端灵魂 ---' &&
-      npm install &&
+      npm install --legacy-peer-deps &&
       npm run build &&
       echo '--- FastAPI + React 服务启动中 ---' &&
       python3 main.py"
