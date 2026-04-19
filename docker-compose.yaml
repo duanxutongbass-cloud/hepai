@@ -2,11 +2,9 @@ version: '3.8'
 
 services:
   nocturne-app:
-    image: node:20-slim
+    build: .
     container_name: nocturne-sync-server
-    user: root
     restart: always
-    working_dir: /app
     ports:
       - "4000:3000"
     environment:
@@ -19,18 +17,7 @@ services:
       - JWT_SECRET=nocturne_reader_secret_key
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - .:/app
-    command: >
-      sh -c "
-      echo '--- 正在准备运行环境 ---' &&
-      apt-get update && apt-get install -y python3 python3-pip &&
-      echo '--- 正在安装后端依赖 ---' &&
-      pip3 install -r requirements.txt --break-system-packages &&
-      echo '--- 正在构建前端灵魂 ---' &&
-      npm install --legacy-peer-deps &&
-      npm run build &&
-      echo '--- FastAPI + React 服务启动中 ---' &&
-      python3 main.py"
+      - ./uploads:/app/uploads     # 仅持久化上传目录
 
 networks:
   default:
