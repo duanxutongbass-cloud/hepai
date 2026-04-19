@@ -2,16 +2,13 @@ version: '3.8'
 
 services:
   nocturne-app:
-    image: node:22-alpine
+    image: node:20-slim
     container_name: nocturne-sync-server
     user: root
     restart: always
+    working_dir: /app
     ports:
       - "4000:3000"
-    volumes:
-      - .:/app
-      - ./uploads:/app/uploads
-    working_dir: /app
     environment:
       - NODE_ENV=production
       - DB_HOST=192.168.31.250     # NAS IP
@@ -20,21 +17,20 @@ services:
       - DB_PASSWORD=A9878480a！    # 数据库密码
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
-    # 终极修复逻辑：
-    # 1. 打印当前目录结构（确保文件上传正确）
-    # 2. 设置 npm 镜像加速
-    # 3. 安装依赖（强制包含构建工具）
-    # 4. 执行构建
-    # 5. 启动服务
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - .:/app
     command: >
       sh -c "
-      echo '--- 正在检查文件结构 ---' &&
-      ls -F &&
-      ls -F src/ &&
-      npm config set registry https://registry.npmmirror.com &&
-      npm install --include=dev --legacy-peer-deps &&
+      echo '--- 正在准备运行环境 ---' &&
+      apt-get update && apt-get install -y python3 python3-pip &&
+      echo '--- 正在安装后端依赖 ---' &&
+      pip3 install -r requirements.txt --break-system-packages &&
+      echo '--- 正在构建前端 (注入灵魂) ---' &&
+      npm install --include=dev &&
       npm run build &&
-      npm start"
+      echo '--- 服务启动中 ---' &&
+      python3 main.py"
 
 networks:
   default:
