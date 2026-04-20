@@ -30,7 +30,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码哈希方案切换为更稳定的 pbkdf2_sha256 (彻底解决 NAS 上的 bcrypt 兼容性问题)
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 db_pool = None
 
 @asynccontextmanager
