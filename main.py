@@ -138,21 +138,29 @@ class RegisterItem(BaseModel):
 
 @app.post("/api/auth/login")
 async def login(item: LoginItem):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请检查环境配置")
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT * FROM users WHERE email = %s", (item.email,))
-            user = await cur.fetchone()
-            if not user or not pwd_context.verify(item.password, user['password']):
-                raise HTTPException(status_code=401, detail="邮箱或密码错误")
-            
-            token = create_access_token({"sub": user['email'], "id": user['id']})
-            return {
-                "token": token, 
-                "user": {"id": user['id'], "email": user['email'], "name": user['name'], "role": user['role']}
-            }
+            try:
+                await cur.execute("SELECT * FROM users WHERE email = %s", (item.email,))
+                user = await cur.fetchone()
+                if not user or not pwd_context.verify(item.password, user['password']):
+                    raise HTTPException(status_code=401, detail="邮箱或密码错误")
+                
+                token = create_access_token({"sub": user['email'], "id": user['id']})
+                return {
+                    "token": token, 
+                    "user": {"id": user['id'], "email": user['email'], "name": user['name'], "role": user['role']}
+                }
+            except Exception as e:
+                print(f"Login DB error: {e}")
+                raise HTTPException(status_code=500, detail="登录查询数据库出错")
 
 @app.post("/api/auth/register")
 async def register(item: RegisterItem):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请检查环境配置")
     hashed = pwd_context.hash(item.password)
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
@@ -164,7 +172,9 @@ async def register(item: RegisterItem):
                 return {"status": "success"}
             except Exception as e:
                 print(f"Register error: {e}")
-                raise HTTPException(status_code=400, detail="该邮箱已被注册")
+                if "Duplicate entry" in str(e):
+                    raise HTTPException(status_code=400, detail="该邮箱已被注册")
+                raise HTTPException(status_code=500, detail=f"数据库写入异常: {str(e)}")
 
 # --- 业务逻辑：乐谱管理 ---
 @app.get("/api/scores")
@@ -224,7 +234,19 @@ async def save_meta(request_data: dict, user: dict = Depends(get_current_user)):
 # --- 静态文件与资源服务 ---
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "engine": "FastAPI"}
+    return {"status": "ok", "engine": "FastAPI", "db": "connected" if db_pool else "disconnected"}
+
+@app.get("/api/db-test")
+async def db_test():
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="数据库未连接")
+    try:
+        async with db_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT 1")
+                return {"status": "success", "message": "数据库可访问"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 挂载上传目录
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

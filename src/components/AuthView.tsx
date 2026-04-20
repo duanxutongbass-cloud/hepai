@@ -34,8 +34,10 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
         onSuccess(loginResponse.user);
       }
     } catch (err: any) {
-      console.error('Auth error:', err);
-      setError(err.response?.data?.error || '操作失败，请检查网络连接');
+      console.error('Auth Full Error:', err);
+      console.log('Error Response Data:', err.response?.data);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || '操作失败，请检查网络连接或服务器配置';
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }

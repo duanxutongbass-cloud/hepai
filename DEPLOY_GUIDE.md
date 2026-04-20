@@ -25,5 +25,14 @@
 3. 点击 **生成/项目启动**。
 4. 访问地址：`http://[NAS_IP]:4000` 或您的自定义域名。
 
+## 🛠️ 故障排查 (Troubleshooting)
+如果在注册或登录时显示“检查网络连接”：
+1. **检查数据库连通性**：
+   访问 `http://[NAS_IP]:4000/api/db-test`。
+   - 如果显示 `数据库可访问`，说明配置正确。
+   - 如果显示 `数据库未连接` 或报错，请检查 `docker-compose.yaml` 中的 `DB_HOST` (必须是 NAS 的内网 IP，不能是 localhost) 和 `DB_PASSWORD`。
+2. **重置容器**：
+   修改完环境变量后，请务必执行 `docker-compose down` 然后 `docker-compose up -d --build` 以确保配置生效。
+
 ---
 *提示：目前的 `docker-compose.yaml` 已经为您预填了大部分参数，您只需要根据实际情况微调密码即可。*
