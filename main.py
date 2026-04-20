@@ -30,8 +30,25 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# 密码哈希方案切换为更稳定的 pbkdf2_sha256 (彻底解决 NAS 上的 bcrypt 兼容性问题)
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+import hashlib
+import hmac
+
+# 终极方案：手动实现原生 SHA256 加密，完全不依赖 passlib/bcrypt 等外部驱动
+# 解决群晖 NAS 各种库冲突问题
+def hash_password(password: str):
+    salt = os.urandom(16)
+    hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    return salt.hex() + ":" + hash_obj.hex()
+
+def verify_password(plain_password: str, hashed_password: str):
+    try:
+        salt_hex, hash_hex = hashed_password.split(":")
+        salt = bytes.fromhex(salt_hex)
+        expected_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode(), salt, 100000)
+        return hmac.compare_digest(expected_hash.hex(), hash_hex)
+    except:
+        return False
+
 db_pool = None
 
 @asynccontextmanager
@@ -170,7 +187,7 @@ async def login(item: LoginItem):
             try:
                 await cur.execute("SELECT * FROM users WHERE email = %s", (item.email,))
                 user = await cur.fetchone()
-                if not user or not pwd_context.verify(item.password, user['password']):
+                if not user or not verify_password(item.password, user['password']):
                     raise HTTPException(status_code=401, detail="邮箱或密码错误")
                 
                 token = create_access_token({"sub": user['email'], "id": user['id']})
@@ -190,8 +207,8 @@ async def register(item: RegisterItem):
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                # 尝试哈希密码 (某些环境 bcrypt 库可能有版本冲突，在这里捕获)
-                hashed = pwd_context.hash(item.password)
+                # 尝试哈希密码 (手动实现，不依赖外部驱动)
+                hashed = hash_password(item.password)
                 
                 await cur.execute(
                     "INSERT INTO users (email, password, name) VALUES (%s, %s, %s)",
