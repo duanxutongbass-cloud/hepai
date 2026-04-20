@@ -35,8 +35,22 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
       }
     } catch (err: any) {
       console.error('Auth Full Error:', err);
-      console.log('Error Response Data:', err.response?.data);
-      const errorMsg = err.response?.data?.detail || err.response?.data?.error || '操作失败，请检查网络连接或服务器配置';
+      let errorMsg = '连接失败：请检查 NAS 上的 4000 端口映射或防火墙设置';
+      
+      if (err.response) {
+        // 请求发出了，服务器也响应了，但状态码超出了 2xx 范围
+        console.log('Error Data:', err.response.data);
+        console.log('Error Status:', err.response.status);
+        errorMsg = err.response.data?.detail || err.response.data?.error || `服务器错误 (${err.response.status})`;
+      } else if (err.request) {
+        // 请求发出了，但没有收到响应
+        console.warn('No response received:', err.request);
+        errorMsg = '无法连接到服务器：请确保您正在访问的是 NAS 的内网 IP，且 Docker 容器正在运行';
+      } else {
+        // 在设置请求时触发了一些错误
+        errorMsg = `请求配置错误: ${err.message}`;
+      }
+      
       setError(errorMsg);
     } finally {
       setIsLoading(false);

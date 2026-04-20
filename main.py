@@ -79,11 +79,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Nocturne Sync API (FastAPI Edition)", lifespan=lifespan)
 
-# 允许跨域
+# 允许跨域 (针对 NAS 环境优化)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False, # 使用通配符时不支持 credentials，由于我们使用 JWT 存活，设为 False 更稳健
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -287,8 +287,9 @@ if os.path.exists(dist_path):
     
     @app.get("/{full_path:path}")
     async def serve_react(full_path: str):
+        # 排除 api 和 uploads，防止它们落入 SPA 回退逻辑
         if full_path.startswith("api") or full_path.startswith("uploads"):
-            return None
+             raise HTTPException(status_code=404, detail="API 接口未找到")
         return FileResponse(os.path.join(dist_path, "index.html"))
 else:
     @app.get("/")
