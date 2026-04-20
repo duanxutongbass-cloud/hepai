@@ -21,7 +21,53 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-app = FastAPI(title="Nocturne Sync API (FastAPI Edition)")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- 启动逻辑 ---
+    global db_pool
+    print(f"📡 正在尝试连接数据库服务器: {DB_HOST}:{DB_PORT} (用户: {DB_USER})")
+    
+    # 第一步：尝试连接到 MySQL/MariaDB 服务（确保库存在）
+    try:
+        temp_conn = await aiomysql.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=DB_PASSWORD,
+            autocommit=True, charset='utf8mb4'
+        )
+        async with temp_conn.cursor() as cur:
+            print(f"✨ 成功接入数据库服务器，正在建立/确认数据库 '{DB_NAME}'...")
+            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        temp_conn.close()
+    except Exception as e:
+        print(f"❌ 预连接尝试失败: {e}")
+        if 'latin-1' in str(e):
+            print("🚨 检测到编码错误！原因：您的数据库密码中包含中文感叹号或符号。请在 docker-compose.yaml 中将 ！ 修改为英文的 ! ")
+        print("💡 建议检查: 1. DB_HOST 是否为 NAS 的真实 IP; 2. 数据库是否开启了远程 root 访问")
+
+    # 第二步：初始化正式连接池
+    try:
+        db_pool = await aiomysql.create_pool(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=DB_PASSWORD,
+            db=DB_NAME, autocommit=True,
+            charset='utf8mb4'
+        )
+        print("✅ 异步连接池就绪，正在同步表结构...")
+        await init_db()
+    except Exception as e:
+        print(f"❌ 最终连接池初始化失败: {e}")
+    
+    yield
+    
+    # --- 关闭逻辑 ---
+    if db_pool:
+        db_pool.close()
+        await db_pool.wait_closed()
+        print("🛑 数据库连接已安全关闭")
+
+app = FastAPI(title="Nocturne Sync API (FastAPI Edition)", lifespan=lifespan)
 
 # 允许跨域
 app.add_middleware(
@@ -87,25 +133,6 @@ async def init_db():
             """)
             print("🚀 FastAPI 数据库表结构同步完成")
 
-@app.on_event("startup")
-async def startup():
-    global db_pool
-    try:
-        db_pool = await aiomysql.create_pool(
-            host=DB_HOST, port=DB_PORT,
-            user=DB_USER, password=DB_PASSWORD,
-            db=DB_NAME, autocommit=True
-        )
-        print("✅ 异步 MariaDB 连接池初始化成功")
-        await init_db()
-    except Exception as e:
-        print(f"❌ 数据库连接/初始化失败: {e}")
-
-@app.on_event("shutdown")
-async def shutdown():
-    if db_pool:
-        db_pool.close()
-        await db_pool.wait_closed()
 
 # --- 工具函数：Auth ---
 def create_access_token(data: dict):
