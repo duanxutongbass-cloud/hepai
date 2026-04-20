@@ -3,19 +3,30 @@ import { motion } from 'motion/react';
 import { Mail, Lock, User, ArrowRight, ChevronLeft, ShieldCheck, Music, Globe, Cloud, AlertCircle } from 'lucide-react';
 import { apiService } from '../services/apiService';
 
+/**
+ * 身份验证视图（登录/注册页面）
+ */
 interface AuthViewProps {
-  onBack: () => void;
-  onSuccess: (user: any) => void;
+  onBack: () => void; // 返回上一页的回调
+  onSuccess: (user: any) => void; // 登录/注册成功后的回调
 }
 
 export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
+  // 页面状态：isLogin 为 true 表示登录模式，false 表示注册模式
   const [isLogin, setIsLogin] = useState(true);
+  
+  // 表单输入项
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  
+  // UI 交互状态
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * 处理表单提交
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -23,12 +34,14 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
     
     try {
       if (isLogin) {
+        // --- 登录逻辑 ---
         const response = await apiService.auth.login({ email, password });
-        localStorage.setItem('nocturne_token', response.token);
+        localStorage.setItem('nocturne_token', response.token); // 保存登录凭证
         onSuccess(response.user);
       } else {
+        // --- 注册逻辑 ---
         await apiService.auth.register({ email, password, name });
-        // 注册成功后自动尝试登录
+        // 注册成功后，为了用户体验，自动帮用户在后台调一次登录
         const loginResponse = await apiService.auth.login({ email, password });
         localStorage.setItem('nocturne_token', loginResponse.token);
         onSuccess(loginResponse.user);
@@ -38,16 +51,14 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
       let errorMsg = '连接失败：请检查 NAS 上的 4000 端口映射或防火墙设置';
       
       if (err.response) {
-        // 请求发出了，服务器也响应了，但状态码超出了 2xx 范围
+        // 【服务器报错】比如：密码错误、邮箱已存在等
         console.log('Error Data:', err.response.data);
-        console.log('Error Status:', err.response.status);
         errorMsg = err.response.data?.detail || err.response.data?.error || `服务器错误 (${err.response.status})`;
       } else if (err.request) {
-        // 请求发出了，但没有收到响应
-        console.warn('No response received:', err.request);
+        // 【网络断开】无法建立 TCP 连接（NAS IP 错或者防火墙拦了）
         errorMsg = '无法连接到服务器：请确保您正在访问的是 NAS 的内网 IP，且 Docker 容器正在运行';
       } else {
-        // 在设置请求时触发了一些错误
+        // 【系统配置错误】
         errorMsg = `请求配置错误: ${err.message}`;
       }
       
@@ -59,6 +70,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* 顶部标题栏 */}
       <header className="p-6 flex items-center gap-4">
         <button onClick={onBack} className="p-2 hover:bg-surface-container rounded-full transition-colors">
           <ChevronLeft className="w-6 h-6" />
@@ -67,6 +79,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
       </header>
 
       <main className="flex-1 px-6 py-8 max-w-md mx-auto w-full space-y-8">
+        {/* LOGO 区域 */}
         <div className="text-center space-y-2">
           <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <Music className="w-10 h-10 text-primary" />
@@ -75,7 +88,9 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
           <p className="text-sm text-on-background/50">专业乐团乐谱管理与协作平台</p>
         </div>
 
+        {/* 表单区域 */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 错误信息提示窗 */}
           {error && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
@@ -87,6 +102,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
             </motion.div>
           )}
 
+          {/* 注册模式下的“姓名”输入框 */}
           {!isLogin && (
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest ml-4">姓名</label>
@@ -104,6 +120,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
             </div>
           )}
 
+          {/* 邮箱输入框 */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest ml-4">电子邮箱</label>
             <div className="relative">
@@ -119,6 +136,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
             </div>
           </div>
 
+          {/* 密码输入框 */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-on-background/40 uppercase tracking-widest ml-4">密码</label>
             <div className="relative">
@@ -134,6 +152,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
             </div>
           </div>
 
+          {/* 提交按钮 */}
           <button 
             type="submit"
             disabled={isLoading}
@@ -150,6 +169,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
           </button>
         </form>
 
+        {/* 模式切换按钮 */}
         <div className="text-center">
           <button 
             onClick={() => setIsLogin(!isLogin)}
@@ -159,6 +179,7 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
           </button>
         </div>
 
+        {/* 到底提示特征信息 */}
         <div className="pt-8 grid grid-cols-3 gap-4">
           <div className="text-center space-y-1">
             <div className="w-10 h-10 bg-surface-container rounded-full flex items-center justify-center mx-auto">

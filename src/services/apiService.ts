@@ -1,25 +1,43 @@
 import axios from 'axios';
 
-// 基础链接：优先使用相对路径，这在 Docker/NAS 环境下最稳健
+/**
+ * 后端 API 服务封装模块
+ * 
+ * 在 Docker/NAS 环境中，前端和后端通常运行在同一个网络下。
+ * 使用相对路径（空字符串）可以利用浏览器的自动识别功能，
+ * 避免因为 NAS IP 变动导致无法连接的情况。
+ */
 const API_BASE = ''; 
 
+// 创建 Axios 实例，这是所有网络请求的基础
 const api = axios.create({
   baseURL: API_BASE,
 });
 
-// 如果确实需要手动切换地址，可以通过此方法
+/**
+ * 手动设置服务器地址
+ * 如果您的 NAS 有复杂的反向代理或使用了特定的端口映射，
+ * 可以在前端手动输入服务器地址进行覆盖。
+ */
 export const setServerUrl = (url: string) => {
   const formattedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
   localStorage.setItem('nocturne_server_url', formattedUrl);
+  // 修改后刷新页面，让新的地址生效
   window.location.reload();
 };
 
+/**
+ * 获取当前正在使用的服务器基础地址
+ * 默认使用当前浏览器所在的域名/IP
+ */
 export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
   return stored || window.location.origin;
 };
 
-// 请求拦截器：自动注入 Token
+// 【请求拦截器】
+// 每次发请求前，自动从浏览器的本地存储里拿出 Token 塞进 Header
+// 这样后端才知道“你是谁”，并允许你访问私有数据。
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('nocturne_token');
   if (token) {
@@ -28,15 +46,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 响应拦截器：自动解包获取 data，简化组件逻辑
+// 【响应拦截器】
+// 服务器返回数据后，自动把数据包解开，让组件里拿到的直接就是结果。
 api.interceptors.response.use((response) => {
   return response.data;
 }, (error) => {
   return Promise.reject(error);
 });
 
+/**
+ * 业务 API 汇总
+ */
 export const apiService = {
-  // 获取文件绝对路径
+  /**
+   * 将数据库里的文件路径转换为浏览器可以直接访问的完整 URL
+   * 比如将 "uploads/test.pdf" 变成 "http://192.168.1.5:4000/uploads/test.pdf"
+   */
   getFileUrl: (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
@@ -44,13 +69,13 @@ export const apiService = {
     return `${baseUrl}/${path.replace(/\\/g, '/')}`;
   },
 
-  // 认证相关
+  // 用户认证相关接口
   auth: {
     login: (credentials: any) => api.post('/api/auth/login', credentials) as Promise<any>,
     register: (userData: any) => api.post('/api/auth/register', userData) as Promise<any>,
   },
   
-  // 乐谱管理
+  // 乐谱资源管理
   scores: {
     list: () => api.get('/api/scores') as Promise<any>,
     upload: (formData: FormData) => api.post('/api/scores', formData, {
@@ -58,7 +83,7 @@ export const apiService = {
     }) as Promise<any>,
   },
   
-  // 元数据同步
+  // 云端同步的配置/元数据（比如最近阅读、书签等）
   metadata: {
     get: (key: string) => api.get(`/api/metadata/${key}`) as Promise<any>,
     save: (key: string, value: any) => api.post('/api/metadata', { key, value }) as Promise<any>,

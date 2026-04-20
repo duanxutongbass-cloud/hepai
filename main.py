@@ -13,51 +13,54 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from contextlib import asynccontextmanager
-
-dotenv.load_dotenv()
-
-# --- 配置加载 (环境变量) ---
-DB_HOST = os.getenv("DB_HOST", "192.168.31.250")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "nocturne_sync")
-UPLOAD_DIR = "uploads"
-SECRET_KEY = os.getenv("JWT_SECRET", "nocturne_reader_secret_key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
-
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
 import hashlib
 import hmac
 
-# 终极方案：手动实现原生 SHA256 加密，完全不依赖 passlib/bcrypt 等外部驱动
-# 解决群晖 NAS 各种库冲突问题
+# 加载 .env 环境变量文件
+dotenv.load_dotenv()
+
+# --- 配置加载 (从环境变量中读取，如果没有则使用默认值) ---
+DB_HOST = os.getenv("DB_HOST", "192.168.31.250")  # 数据库地址
+DB_PORT = int(os.getenv("DB_PORT", 3306))         # 数据库端口
+DB_USER = os.getenv("DB_USER", "root")            # 数据库用户名
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")        # 数据库密码
+DB_NAME = os.getenv("DB_NAME", "nocturne_sync")   # 数据库名称
+UPLOAD_DIR = "uploads"                            # 乐谱 PDF 存放目录
+SECRET_KEY = os.getenv("JWT_SECRET", "nocturne_reader_secret_key") # JWT 加密密钥
+ALGORITHM = "HS256"                               # 加密签名算法
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7        # 登录有效期：7天
+
+# 确保上传目录存在
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# --- 核心安全函数 (手动实现 SHA256 加密，解决群晖 NAS 驱动兼容问题) ---
+
 def hash_password(password: str):
-    salt = os.urandom(16)
+    """【加密函数】将明文密码转换为 盐值+哈希 的形式"""
+    salt = os.urandom(16) # 生成随机盐，防止彩虹表攻击
     hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
     return salt.hex() + ":" + hash_obj.hex()
 
 def verify_password(plain_password: str, hashed_password: str):
+    """【验证函数】对比用户输入的密码和数据库中的加密结果"""
     try:
         salt_hex, hash_hex = hashed_password.split(":")
         salt = bytes.fromhex(salt_hex)
         expected_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode(), salt, 100000)
         return hmac.compare_digest(expected_hash.hex(), hash_hex)
     except:
-        return False
+        return False # 格式不正确或对比失败
 
-db_pool = None
+db_pool = None # 数据库连接池占位符
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- 启动逻辑 ---
+    """【生命周期管理】在服务器启动时连接数据库，在关闭时断开"""
     global db_pool
-    print(f"📡 正在尝试连接数据库服务器: {DB_HOST}:{DB_PORT} (用户: {DB_USER})")
+    print(f"📡 正在尝试连接数据库服务器: {DB_HOST}:{DB_PORT}")
     
-    # 第一步：尝试连接到 MySQL/MariaDB 服务（确保库存在）
+    # 第一步：连接到 MySQL 控制台，确保数据库存在
     try:
         temp_conn = await aiomysql.connect(
             host=DB_HOST, port=DB_PORT,
@@ -65,53 +68,44 @@ async def lifespan(app: FastAPI):
             autocommit=True, charset='utf8mb4'
         )
         async with temp_conn.cursor() as cur:
-            print(f"✨ 成功接入数据库服务器，正在建立/确认数据库 '{DB_NAME}'...")
-            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4")
         temp_conn.close()
     except Exception as e:
-        print(f"❌ 预连接尝试失败: {e}")
-        if 'latin-1' in str(e):
-            print("🚨 检测到编码错误！原因：您的数据库密码中包含中文感叹号或符号。请查看 DEPLOY_GUIDE.md 修正！")
-        print("💡 建议检查: 1. DB_HOST 是否为 NAS 的真实 IP; 2. 数据库是否开启了远程 root 访问")
+        print(f"❌ 数据库预连接失败: {e}")
 
-    # 第二步：初始化正式连接池
+    # 第二步：初始化异步连接池（提升高并发性能）
     try:
         db_pool = await aiomysql.create_pool(
             host=DB_HOST, port=DB_PORT,
             user=DB_USER, password=DB_PASSWORD,
-            db=DB_NAME, autocommit=True,
-            charset='utf8mb4'
+            db=DB_NAME, autocommit=True, charset='utf8mb4'
         )
-        print("✅ 异步连接池就绪，正在同步表结构...")
-        await init_db()
+        await init_db() # 启动时同步表结构
     except Exception as e:
-        print(f"❌ 最终连接池初始化失败: {e}")
+        print(f"❌ 连接池初始化失败: {e}")
     
-    yield
+    yield # 代码运行期间在此等待
     
-    # --- 关闭逻辑 ---
     if db_pool:
         db_pool.close()
         await db_pool.wait_closed()
-        print("🛑 数据库连接已安全关闭")
 
-app = FastAPI(title="Nocturne Sync API (FastAPI Edition)", lifespan=lifespan)
+app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan)
 
-# 允许跨域 (针对 NAS 环境优化)
+# --- 跨域策略 (允许前端与后端通讯) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False, # 使用通配符时不支持 credentials，由于我们使用 JWT 存活，设为 False 更稳健
+    allow_origins=["*"], # 允许任何地址访问
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 async def init_db():
-    """初始化数据库表结构，确保与 Node.js 后端完全一致"""
+    """【数据库同步】如果表不存在则自动创建，并自动修复旧版数据库字段"""
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
-            # 创建用户表
+            # 1. 创建用户表
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -122,12 +116,15 @@ async def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            # 自动迁移：如果已存在旧表但没有 role 列，则补齐 (群晖环境常见问题)
+            
+            # 自动迁移：为旧版数据库补齐 role 字段
             try:
                 await cur.execute("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'member'")
-                print("✨ 已为旧版 'users' 表补齐 'role' 字段")
+                print("✨ 检查完毕：users 表结构已同步")
             except:
-                pass # 已存在则忽略错误
+                pass 
+
+            # 2. 创建乐谱主表
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS scores (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -140,7 +137,8 @@ async def init_db():
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
             """)
-            # 创建元数据表 (支持用户隔离)
+            
+            # 3. 创建元数据表 (存储用户标记/标注)
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS app_metadata (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -151,29 +149,29 @@ async def init_db():
                     UNIQUE KEY (user_id, meta_key)
                 )
             """)
-            print("🚀 FastAPI 数据库表结构同步完成")
+            print("🚀 数据库初始化完成")
 
 
-# --- 工具函数：Auth ---
+# --- 工具函数：生成 JWT Token ---
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# --- 认证中间件 ---
+# --- 认证中间件：验证 Token 是否合法 ---
 async def get_current_user(request: Request):
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未授权")
+        raise HTTPException(status_code=401, detail="未授权，请重新登录")
     token = auth_header.split(" ")[1]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except JWTError:
-        raise HTTPException(status_code=401, detail="Token 无效")
+        raise HTTPException(status_code=401, detail="登录已过期")
 
-# --- 业务逻辑：认证 ---
+# --- 数据模型定义 (用于校验前端传来的 JSON) ---
 class LoginItem(BaseModel):
     email: str
     password: str
@@ -183,18 +181,21 @@ class RegisterItem(BaseModel):
     password: str
     name: Optional[str] = ""
 
+# --- 接口：用户登录 ---
 @app.post("/api/auth/login")
 async def login(item: LoginItem):
     if not db_pool:
-        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请检查环境配置")
+        raise HTTPException(status_code=503, detail="服务器数据库连接失败")
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             try:
                 await cur.execute("SELECT * FROM users WHERE email = %s", (item.email,))
                 user = await cur.fetchone()
-                if not user or not verify_password(item.password, user['password']):
+                # 检查用户是否存在，并验证手动生成的哈希密码
+                if not user or not verify_password(item.password, user.get('password')):
                     raise HTTPException(status_code=401, detail="邮箱或密码错误")
                 
+                # 生成登录凭证
                 token = create_access_token({"sub": user.get('email'), "id": user.get('id')})
                 return {
                     "token": token, 
@@ -208,19 +209,19 @@ async def login(item: LoginItem):
             except Exception as e:
                 err_str = str(e)
                 print(f"Login DB error: {err_str}")
-                raise HTTPException(status_code=500, detail=f"登录查询数据库出错: {err_str}")
+                raise HTTPException(status_code=500, detail=f"数据库查询失败: {err_str}")
 
+# --- 接口：用户注册 ---
 @app.post("/api/auth/register")
 async def register(item: RegisterItem):
     if not db_pool:
-        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请确认 DEPLOY_GUIDE.md 中的配置")
+        raise HTTPException(status_code=503, detail="数据库未就绪")
     
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                # 尝试哈希密码 (手动实现，不依赖外部驱动)
+                # 使用手动 SHA256 加密保存密码
                 hashed = hash_password(item.password)
-                
                 await cur.execute(
                     "INSERT INTO users (email, password, name) VALUES (%s, %s, %s)",
                     (item.email, hashed, item.name)
@@ -228,14 +229,11 @@ async def register(item: RegisterItem):
                 return {"status": "success"}
             except Exception as e:
                 err_str = str(e)
-                print(f"Register precise error: {err_str}")
                 if "Duplicate entry" in err_str:
                     raise HTTPException(status_code=400, detail="该邮箱已被注册")
-                if "bcrypt" in err_str or "__about__" in err_str:
-                    raise HTTPException(status_code=500, detail=f"后端加密驱动异常，请重新构建容器: {err_str}")
-                raise HTTPException(status_code=500, detail=f"数据库操作失败: {err_str}")
+                raise HTTPException(status_code=500, detail=f"注册失败: {err_str}")
 
-# --- 业务逻辑：乐谱管理 ---
+# --- 接口：获取乐谱列表 ---
 @app.get("/api/scores")
 async def list_scores():
     async with db_pool.acquire() as conn:
@@ -243,11 +241,13 @@ async def list_scores():
             await cur.execute("SELECT * FROM scores ORDER BY created_at DESC")
             return await cur.fetchall()
 
+# --- 接口：上传乐谱 ---
 @app.post("/api/scores")
 async def upload_score(title: str = Form(...), category: str = Form(""), file: UploadFile = File(...)):
     file_path = f"uploads/{file.filename}"
     abs_path = os.path.join(UPLOAD_DIR, file.filename)
     
+    # 将上传的文件保存到硬盘
     with open(abs_path, "wb") as buffer:
         buffer.write(await file.read())
     
@@ -257,10 +257,9 @@ async def upload_score(title: str = Form(...), category: str = Form(""), file: U
                 "INSERT INTO scores (title, file_path, category) VALUES (%s, %s, %s)",
                 (title, file_path, category)
             )
-            # 返回新创建的对象或状态
             return {"status": "success", "file_path": file_path, "title": title}
 
-# --- 业务逻辑：元数据 ---
+# --- 接口：保存/获取自定义标注数据 ---
 @app.get("/api/metadata/{key}")
 async def get_meta(key: str, user: dict = Depends(get_current_user)):
     user_id = user.get("id")
@@ -280,7 +279,6 @@ async def save_meta(request_data: dict, user: dict = Depends(get_current_user)):
     value = request_data.get("value")
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
-            # 存储为 JSON 字符串
             val_str = str(value)
             await cur.execute(
                 """INSERT INTO app_metadata (user_id, meta_key, meta_value) 
@@ -290,11 +288,7 @@ async def save_meta(request_data: dict, user: dict = Depends(get_current_user)):
             )
             return {"status": "success"}
 
-# --- 静态文件与资源服务 ---
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "engine": "FastAPI", "db": "connected" if db_pool else "disconnected"}
-
+# --- 维护接口：健康检查 ---
 @app.get("/api/db-test")
 async def db_test():
     if not db_pool:
@@ -307,18 +301,20 @@ async def db_test():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 挂载上传目录
+# --- 静态资源托管 ---
+# 1. 托管 uploads 文件夹中的乐谱 PDF
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 dist_path = os.path.join(os.getcwd(), "dist")
 if os.path.exists(dist_path):
+    # 2. 托管已经编译好的 React 前端代码
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
     
+    # 3. React 路由捕获：让前端控制页面跳转
     @app.get("/{full_path:path}")
     async def serve_react(full_path: str):
-        # 排除 api 和 uploads，防止它们落入 SPA 回退逻辑
         if full_path.startswith("api") or full_path.startswith("uploads"):
-             raise HTTPException(status_code=404, detail="API 接口未找到")
+             raise HTTPException(status_code=404, detail="接口未找到")
         return FileResponse(os.path.join(dist_path, "index.html"))
 else:
     @app.get("/")
