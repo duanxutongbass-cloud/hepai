@@ -122,7 +122,12 @@ async def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            # 创建乐谱表 (同步字段名)
+            # 自动迁移：如果已存在旧表但没有 role 列，则补齐 (群晖环境常见问题)
+            try:
+                await cur.execute("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'member'")
+                print("✨ 已为旧版 'users' 表补齐 'role' 字段")
+            except:
+                pass # 已存在则忽略错误
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS scores (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -190,14 +195,20 @@ async def login(item: LoginItem):
                 if not user or not verify_password(item.password, user['password']):
                     raise HTTPException(status_code=401, detail="邮箱或密码错误")
                 
-                token = create_access_token({"sub": user['email'], "id": user['id']})
+                token = create_access_token({"sub": user.get('email'), "id": user.get('id')})
                 return {
                     "token": token, 
-                    "user": {"id": user['id'], "email": user['email'], "name": user['name'], "role": user['role']}
+                    "user": {
+                        "id": user.get('id'), 
+                        "email": user.get('email'), 
+                        "name": user.get('name'), 
+                        "role": user.get('role', 'member')
+                    }
                 }
             except Exception as e:
-                print(f"Login DB error: {e}")
-                raise HTTPException(status_code=500, detail="登录查询数据库出错")
+                err_str = str(e)
+                print(f"Login DB error: {err_str}")
+                raise HTTPException(status_code=500, detail=f"登录查询数据库出错: {err_str}")
 
 @app.post("/api/auth/register")
 async def register(item: RegisterItem):
