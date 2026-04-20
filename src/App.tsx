@@ -49,8 +49,8 @@ export default function App() {
           const keys: (keyof any)[] = ['folders', 'roles', 'partTags', 'userRole', 'profile'];
           for (const key of keys) {
             const cloudVal = await apiService.metadata.get(key as string);
-            if (cloudVal.data) {
-              await storageService.saveMetadata({ [key]: cloudVal.data });
+            if (cloudVal) {
+              await storageService.saveMetadata({ [key]: cloudVal });
             }
           }
           // Reload local meta

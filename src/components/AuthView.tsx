@@ -24,13 +24,14 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
     try {
       if (isLogin) {
         const response = await apiService.auth.login({ email, password });
-        localStorage.setItem('nocturne_token', response.data.token);
-        onSuccess(response.data.user);
+        localStorage.setItem('nocturne_token', response.token);
+        onSuccess(response.user);
       } else {
-        const response = await apiService.auth.register({ email, password, name });
-        // 注册成功后自动登录或切换到登录界面
-        setIsLogin(true);
-        setError('注册成功，请登录');
+        await apiService.auth.register({ email, password, name });
+        // 注册成功后自动尝试登录
+        const loginResponse = await apiService.auth.login({ email, password });
+        localStorage.setItem('nocturne_token', loginResponse.token);
+        onSuccess(loginResponse.user);
       }
     } catch (err: any) {
       console.error('Auth error:', err);
