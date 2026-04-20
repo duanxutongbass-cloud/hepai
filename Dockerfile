@@ -1,39 +1,49 @@
-# --- 阶段 1: 构建前端 ---
-FROM node:20-bookworm AS frontend-builder
+# --- 第一阶段: 构建前端 (Builder) ---
+# 使用较轻量的 node 镜像
+FROM node:20-slim AS builder
+
+# 设置内存限制，防止在低内存 NAS 上构建失败
+ENV NODE_OPTIONS="--max-old-space-size=1024"
+
 WORKDIR /app
+
+# 先安装构建工具 (slim 镜像缺少构建所需的某些工具)
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+# 利用 Docker 缓存，先安装依赖
 COPY package*.json ./
-# 使用淘宝镜像加速并忽略 peer 依赖冲突
 RUN npm config set registry https://registry.npmmirror.com && \
     npm install --legacy-peer-deps
+
+# 复制源码并构建
 COPY . .
 RUN npm run build
 
-# --- 阶段 2: 运行环境 ---
-FROM node:20-bookworm
+# --- 第二阶段: 运行环境 (Runtime) ---
+# 再次使用 Node 镜像是因为我们环境需要 python3 + node (或直接用 node 镜像里的 python)
+FROM node:20-slim
+
 WORKDIR /app
 
-# 安装 Python 环境
+# 安装运行所需的组件 (只有 python)
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
-    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制依赖项
+# 复制后端依赖并安装
 COPY requirements.txt ./
-# 使用清华镜像加速安装 Python 依赖
 RUN pip3 install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt --break-system-packages
 
-# 从构建阶段复制前端产物
-COPY --from=frontend-builder /app/dist ./dist
-# 复制后端代码
-COPY main.py .env* ./
-
-# 创建上传目录
+# 从 builder 阶段复制构建好的静态文件
+COPY --from=builder /app/dist ./dist
+# 复制后端主程序
+COPY main.py ./
+# 准备上传目录
 RUN mkdir -p uploads
 
-# 暴露端口
+# 暴露后端端口
 EXPOSE 3000
 
-# 启动 (FastAPI 会提供 dist 目录的服务)
+# 运行 FastAPI
 CMD ["python3", "main.py"]
