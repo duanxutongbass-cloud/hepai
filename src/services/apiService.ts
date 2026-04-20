@@ -1,23 +1,23 @@
 import axios from 'axios';
 
-// 基础链接：自动识别当前环境地址。如果在 NAS 上，它会自动使用您访问的 4000 端口
-const DEFAULT_DOMAIN = window.location.origin;
-let API_BASE = localStorage.getItem('nocturne_server_url') || DEFAULT_DOMAIN;
+// 基础链接：优先使用相对路径，这在 Docker/NAS 环境下最稳健
+const API_BASE = ''; 
 
 const api = axios.create({
   baseURL: API_BASE,
 });
 
-// 提供一个方法允许设置服务器地址 (保留灵活性)
+// 如果确实需要手动切换地址，可以通过此方法
 export const setServerUrl = (url: string) => {
   const formattedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
   localStorage.setItem('nocturne_server_url', formattedUrl);
-  API_BASE = formattedUrl;
-  api.defaults.baseURL = formattedUrl;
   window.location.reload();
 };
 
-export const getServerUrl = () => API_BASE;
+export const getServerUrl = () => {
+  const stored = localStorage.getItem('nocturne_server_url');
+  return stored || window.location.origin;
+};
 
 // 请求拦截器：自动注入 Token
 api.interceptors.request.use((config) => {

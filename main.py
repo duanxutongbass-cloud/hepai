@@ -184,21 +184,27 @@ async def login(item: LoginItem):
 @app.post("/api/auth/register")
 async def register(item: RegisterItem):
     if not db_pool:
-        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请检查环境配置")
-    hashed = pwd_context.hash(item.password)
+        raise HTTPException(status_code=503, detail="服务器数据库尚未连接，请确认 DEPLOY_GUIDE.md 中的配置")
+    
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
+                # 尝试哈希密码 (某些环境 bcrypt 库可能有版本冲突，在这里捕获)
+                hashed = pwd_context.hash(item.password)
+                
                 await cur.execute(
                     "INSERT INTO users (email, password, name) VALUES (%s, %s, %s)",
                     (item.email, hashed, item.name)
                 )
                 return {"status": "success"}
             except Exception as e:
-                print(f"Register error: {e}")
-                if "Duplicate entry" in str(e):
+                err_str = str(e)
+                print(f"Register precise error: {err_str}")
+                if "Duplicate entry" in err_str:
                     raise HTTPException(status_code=400, detail="该邮箱已被注册")
-                raise HTTPException(status_code=500, detail=f"数据库写入异常: {str(e)}")
+                if "bcrypt" in err_str or "__about__" in err_str:
+                    raise HTTPException(status_code=500, detail=f"后端加密驱动异常，请重新构建容器: {err_str}")
+                raise HTTPException(status_code=500, detail=f"数据库操作失败: {err_str}")
 
 # --- 业务逻辑：乐谱管理 ---
 @app.get("/api/scores")
