@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import aiomysql
 import asyncio
@@ -11,17 +12,26 @@ import dotenv
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from contextlib import asynccontextmanager
 
 dotenv.load_dotenv()
 
-# 安全配置
+# --- 配置加载 (环境变量) ---
+DB_HOST = os.getenv("DB_HOST", "192.168.31.250")
+DB_PORT = int(os.getenv("DB_PORT", 3306))
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "nocturne_sync")
+UPLOAD_DIR = "uploads"
 SECRET_KEY = os.getenv("JWT_SECRET", "nocturne_reader_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
 
-from contextlib import asynccontextmanager
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+db_pool = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,7 +53,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"❌ 预连接尝试失败: {e}")
         if 'latin-1' in str(e):
-            print("🚨 检测到编码错误！原因：您的数据库密码中包含中文感叹号或符号。请在 docker-compose.yaml 中将 ！ 修改为英文的 ! ")
+            print("🚨 检测到编码错误！原因：您的数据库密码中包含中文感叹号或符号。请查看 DEPLOY_GUIDE.md 修正！")
         print("💡 建议检查: 1. DB_HOST 是否为 NAS 的真实 IP; 2. 数据库是否开启了远程 root 访问")
 
     # 第二步：初始化正式连接池
@@ -78,19 +88,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 外部化配置 (环境变量)
-DB_HOST = os.getenv("DB_HOST", "192.168.31.250")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "nocturne_sync")
-UPLOAD_DIR = "uploads"
-
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-# 数据库连接池
-db_pool = None
 
 async def init_db():
     """初始化数据库表结构，确保与 Node.js 后端完全一致"""

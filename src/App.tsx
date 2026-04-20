@@ -46,11 +46,15 @@ export default function App() {
       if (isLoggedIn) {
         try {
           // Sync some core keys from cloud
-          const keys: (keyof any)[] = ['folders', 'roles', 'partTags', 'userRole', 'profile'];
+          const keys = ['folders', 'roles', 'partTags', 'userRole', 'profile'] as const;
           for (const key of keys) {
-            const cloudVal = await apiService.metadata.get(key as string);
-            if (cloudVal) {
-              await storageService.saveMetadata({ [key]: cloudVal });
+            try {
+              const cloudVal = await apiService.metadata.get(key);
+              if (cloudVal) {
+                await storageService.saveMetadata({ [key]: cloudVal } as any);
+              }
+            } catch (syncErr) {
+              console.warn(`Failed to sync metadata key: ${key}`, syncErr);
             }
           }
           // Reload local meta
