@@ -186,6 +186,7 @@ export default function App() {
                 isAdmin={isAdmin} 
                 setIsAdmin={handleSetIsAdmin} 
                 onViewChange={setCurrentView}
+                onLogout={handleLogout}
               />
             )}
             {currentView === 'reader' && (

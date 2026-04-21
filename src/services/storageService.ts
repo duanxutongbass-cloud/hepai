@@ -25,6 +25,16 @@ export interface PlacedObject {
   fontSize?: number;
 }
 
+export interface ScorePart {
+  id: string;
+  name: string;
+  blob: Blob;
+  cloudUrl?: string; // Add this
+  assignedTo?: string[];
+  tags?: string[];
+  pendingRequests?: string[];
+}
+
 export interface ScoreData {
   id: string;
   title: string;
@@ -32,14 +42,73 @@ export interface ScoreData {
   tags?: string[];
   folder?: string;
   isFavorite?: boolean;
-  blob?: Blob;       // 乐谱文件本身的二进制数据（用于离线查看）
-  cloudUrl?: string; // 该乐谱在 NAS 上的下载链接
-  annotations?: { [page: number]: string }; // 手写涂鸦数据
-  objects?: { [page: number]: PlacedObject[] }; // 放置的符号数据
+  blob?: Blob;
+  coverBlob?: Blob;
+  audioBlob?: Blob;
+  cloudUrl?: string;
+  type?: 'single' | 'collection';
+  parts?: ScorePart[];
+  duration?: number; // Change to number
+  bpm?: number;
+  key?: string;
+  uploaderId?: string;
+  uploaderName?: string;
+  allowDownload?: boolean;
+  lastViewedAt?: number;
+  originalScoreId?: string;
+  annotations?: { [page: number]: string };
+  objects?: { [page: number]: PlacedObject[] };
   updatedAt: number;
 }
 
-// ... 更多接口定义 (忽略，主要关注逻辑)
+export interface Setlist {
+  id: string;
+  name: string;
+  program: string[]; // Score IDs
+  performanceDate?: number;
+  imageBlob?: Blob;
+  createdAt?: number;
+  status?: 'draft' | 'published' | 'active' | 'completed' | 'archived'; // Expanded
+}
+
+export interface Notification {
+  id: string;
+  type: 'info' | 'request' | 'upload';
+  title: string;
+  message: string;
+  timestamp: number;
+  read: boolean;
+}
+
+export type UserRole = 'admin' | 'sub-admin' | 'member';
+
+export interface GroupInfo {
+  id: string;
+  name: string;
+  inviteCode?: string;
+  mainAdminId?: string;
+  subAdminIds?: string[];
+  members?: string[]; // Add this
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface RoleChangeRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  role: UserRole;
+  status?: 'pending' | 'approved' | 'rejected'; // Add this
+  requestedRole?: UserRole; // Add this
+}
+
+// --- 类型定义结束 ---
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -73,6 +142,12 @@ export const storageService = {
   async saveScore(score: ScoreData) {
     const db = await getDB();
     await db.put(STORE_NAME, score);
+  },
+
+  // 删除乐谱
+  async deleteScore(id: string) {
+    const db = await getDB();
+    await db.delete(STORE_NAME, id);
   },
 
   // 获取单个乐谱信息
