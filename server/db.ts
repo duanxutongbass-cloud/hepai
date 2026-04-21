@@ -3,6 +3,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// 打印当前数据库配置信息 (脱敏) 以便调试环境变量是否加载成功
+console.log('--- 数据库配置检查 ---');
+console.log('DB_HOST:', process.env.DB_HOST || '(未设置)');
+console.log('DB_PORT:', process.env.DB_PORT || '3306 (默认)');
+console.log('DB_USER:', process.env.DB_USER || '(未设置)');
+console.log('DB_NAME:', process.env.DB_NAME || '(未设置)');
+console.log('DB_PASS:', process.env.DB_PASSWORD ? '********' : '(未设置)');
+console.log('---------------------');
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: parseInt(process.env.DB_PORT || '3306'),

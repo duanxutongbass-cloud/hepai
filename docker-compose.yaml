@@ -12,7 +12,7 @@ services:
       - DB_HOST=192.168.31.250     # 您的群晖 NAS IP
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=A9878480a！    # 数据库密码
+      - DB_PASSWORD=A9878480a!    # 数据库密码
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
       - GEMINI_API_KEY=${GEMINI_API_KEY}

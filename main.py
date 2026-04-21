@@ -38,6 +38,17 @@ DB_PORT = int(os.getenv("DB_PORT", 3306))         # 数据库端口
 DB_USER = os.getenv("DB_USER", "root")            # 数据库用户名
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")        # 数据库密码
 DB_NAME = os.getenv("DB_NAME", "nocturne_sync")   # 数据库名称
+
+# 检查配置中是否存在可能的编码问题 (如中文标点)
+def check_config_encoding():
+    for name, val in [("DB_USER", DB_USER), ("DB_PASSWORD", DB_PASSWORD), ("DB_NAME", DB_NAME)]:
+        try:
+            val.encode('latin-1')
+        except UnicodeEncodeError:
+            logger.warning(f"⚠️ 警告: 环境变量 {name} 中包含非标准字符 (可能是中文标点)，这可能导致数据库连接失败。")
+
+check_config_encoding()
+
 UPLOAD_DIR = "uploads"                            # 乐谱 PDF 存放目录
 SECRET_KEY = os.getenv("JWT_SECRET", "nocturne_reader_secret_key") # JWT 加密密钥
 ALGORITHM = "HS256"                               # 加密签名算法
