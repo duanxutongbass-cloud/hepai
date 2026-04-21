@@ -9,15 +9,11 @@ import axios from 'axios';
  */
 const API_BASE = ''; 
 
-// 创建 Axios 实例，这是所有网络请求的基础
-const api = axios.create({
-  baseURL: API_BASE,
-});
+// 创建 Axios 实例
+const api = axios.create();
 
 /**
  * 手动设置服务器地址
- * 如果您的 NAS 有复杂的反向代理或使用了特定的端口映射，
- * 可以在前端手动输入服务器地址进行覆盖。
  */
 export const setServerUrl = (url: string) => {
   const formattedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
@@ -28,25 +24,29 @@ export const setServerUrl = (url: string) => {
 
 /**
  * 获取当前正在使用的服务器基础地址
- * 在真正的 App 生产环境中，这里通常会指定您的公网域名。
  */
 export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
   if (stored) return stored;
 
-  // 生产环境：直接指向您的公网域名（注意：请确保端口号与您转发的外部端口一致）
+  // 生产环境：直接指向公网域名
   return 'http://dxtbass.huazo.xyz:4000'; 
 };
 
 // 【请求拦截器】
-// 每次发请求前，自动从浏览器的本地存储里拿出 Token 塞进 Header
-// 这样后端才知道“你是谁”，并允许你访问私有数据。
 api.interceptors.request.use((config) => {
+  // 动态注入基础 URL
+  if (config.url && !config.url.startsWith('http')) {
+    config.baseURL = getServerUrl();
+  }
+
   const token = localStorage.getItem('nocturne_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
 // 【响应拦截器】

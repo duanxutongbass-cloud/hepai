@@ -18,6 +18,7 @@ import RecentPerformancesView from './components/RecentPerformancesView'; // 最
 // 引入服务层
 import { apiService } from './services/apiService';
 import { storageService } from './services/storageService';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // 定义可能的视图类型
 export type View = 'library' | 'setlist' | 'sync' | 'settings' | 'reader' | 'recent' | 'profile' | 'auth';
@@ -138,8 +139,9 @@ export default function App() {
     <div className="min-h-screen bg-background text-white font-sans flex flex-col overflow-hidden">
       {/* 主视图区域：带过场动画 */}
       <main className="flex-1 relative overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
+        <ErrorBoundary>
+          <AnimatePresence mode="wait">
+            <motion.div
             key={currentView}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -203,6 +205,7 @@ export default function App() {
             )}
           </motion.div>
         </AnimatePresence>
+       </ErrorBoundary>
       </main>
 
       {/* 底部导航栏（在阅读模式下隐藏，给乐谱留出最大空间） */}

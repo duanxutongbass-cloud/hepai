@@ -9,8 +9,8 @@ import { apiService } from '../services/apiService';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Set up PDF.js worker - Use a more robust way to load the worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Set up PDF.js worker - Use a more stable CDN for APK/WebView environments
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface ReaderViewProps {
   onBack: () => void;
@@ -32,6 +32,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [isOffline, setIsOffline] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pdfFile, setPdfFile] = useState<string | Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -235,55 +236,68 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
     const loadScore = async () => {
       if (!scoreId) return;
       setIsLoading(true);
+      setLoadError(null);
       
-      // Load program for navigation
-      const meta = await storageService.getMetadata();
-      const activeSet = (meta.setlists || []).find(s => s.id === (meta.activeSetlistId || ''));
-      if (activeSet) {
-        setProgramIds(activeSet.program);
-      } else {
-        setProgramIds(meta.program || []);
-      }
+      try {
+        // Load program for navigation
+        const meta = await storageService.getMetadata();
+        const activeSet = (meta.setlists || []).find(s => s.id === (meta.activeSetlistId || ''));
+        if (activeSet) {
+          setProgramIds(activeSet.program);
+        } else {
+          setProgramIds(meta.program || []);
+        }
 
-      const saved = await storageService.getScore(scoreId);
-      if (saved) {
-        setScoreData(saved);
-        if (saved.blob) {
-          setPdfFile(saved.blob);
-          setIsOffline(true);
-        } else if (saved.cloudUrl) {
-          setPdfFile(apiService.getFileUrl(saved.cloudUrl));
-          setIsOffline(false);
-          // Try to cache it locally in background
-          fetch(apiService.getFileUrl(saved.cloudUrl))
-            .then(res => res.blob())
-            .then(blob => {
-              storageService.saveScore({ ...saved, blob });
-            })
-            .catch(console.error);
+        const saved = await storageService.getScore(scoreId);
+        if (saved) {
+          setScoreData(saved);
+          if (saved.blob) {
+            setPdfFile(saved.blob);
+            setIsOffline(true);
+          } else if (saved.cloudUrl) {
+            const url = apiService.getFileUrl(saved.cloudUrl);
+            setPdfFile(url);
+            setIsOffline(false);
+            
+            // Try to cache it locally in background
+            fetch(url)
+              .then(res => {
+                if (!res.ok) throw new Error('网络响应失败');
+                return res.blob();
+              })
+              .then(blob => {
+                storageService.saveScore({ ...saved, blob });
+              })
+              .catch(err => console.warn('后台自动缓存失败:', err));
+          }
+          
+          if (saved.annotations && saved.annotations[1] && canvasRef.current) {
+            canvasRef.current.loadSaveData(saved.annotations[1], true);
+          }
+          if (saved.objects && saved.objects[1]) {
+            setPlacedObjects(saved.objects[1]);
+          }
+        } else if (scoreId === 'sample-score') {
+          const response = await fetch('https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf');
+          const blob = await response.blob();
+          const sample: ScoreData = { 
+            id: 'sample-score', 
+            title: '月光奏鸣曲', 
+            blob, 
+            type: 'single',
+            updatedAt: Date.now() 
+          };
+          setScoreData(sample);
+          setPdfFile(blob);
+        } else {
+          throw new Error('未找到该乐谱数据');
         }
-        
-        if (saved.annotations && saved.annotations[1] && canvasRef.current) {
-          canvasRef.current.loadSaveData(saved.annotations[1], true);
-        }
-        if (saved.objects && saved.objects[1]) {
-          setPlacedObjects(saved.objects[1]);
-        }
-      } else if (scoreId === 'sample-score') {
-        // Fallback for sample if not in DB
-        const response = await fetch('https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf');
-        const blob = await response.blob();
-        const sample: ScoreData = { 
-          id: 'sample-score', 
-          title: '月光奏鸣曲', 
-          blob, 
-          type: 'single',
-          updatedAt: Date.now() 
-        };
-        setScoreData(sample);
-        setPdfFile(blob);
+      } catch (err: any) {
+        console.error('Score Load Failed:', err);
+        setLoadError(err.message || '乐谱读取失败，请检查网络或重试');
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     loadScore();
   }, [scoreId]);
@@ -1064,8 +1078,37 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
               onMouseLeave={handleDragEnd}
             >
               {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                <div className="absolute inset-0 flex items-center justify-center bg-white z-10 px-6 text-center">
+                  <div className="space-y-4">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
+                    <p className="text-sm font-bold text-on-background/40">正在加载专业乐谱数据...</p>
+                  </div>
+                </div>
+              )}
+
+              {loadError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white z-20 px-8 text-center">
+                  <div className="space-y-6 max-w-sm">
+                    <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mx-auto">
+                      <AlertCircle className="w-8 h-8 text-error" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-on-background mb-2">加载出错了</h3>
+                      <p className="text-xs text-on-background/50 leading-relaxed">{loadError}</p>
+                    </div>
+                    <button 
+                      onClick={() => window.location.reload()}
+                      className="w-full py-4 bg-primary text-on-primary rounded-2xl font-bold shadow-lg shadow-primary/20"
+                    >
+                      再次重试
+                    </button>
+                    <button 
+                      onClick={onBack}
+                      className="text-xs font-bold text-on-background/30 uppercase tracking-widest"
+                    >
+                      返回曲库
+                    </button>
+                  </div>
                 </div>
               )}
               

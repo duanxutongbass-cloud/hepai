@@ -450,7 +450,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">Tick Sound Mode</p>
+                <p className="mono-label mb-1">节拍器音色 (音色)</p>
                 <p className="text-xs text-on-background/50">打击声音源选择</p>
               </div>
               <div className="flex bg-background/50 rounded-xl p-1 border border-white/5">
@@ -479,7 +479,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           <div className="hardware-card p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">蓝牙踏板同步 (Bluetooth)</p>
+                <p className="mono-label mb-1">蓝牙踏板同步 (踏板)</p>
                 <p className="text-xs text-on-background/50">控制蓝牙翻页踏板的响应状态</p>
               </div>
               <button 
@@ -496,7 +496,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-background/40 p-4 rounded-xl border border-white/5 group hover:border-primary/20 transition-all">
-                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">下一页映射 (Next)</p>
+                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">下一页映射 (后翻)</p>
                 <div className="flex flex-wrap gap-2">
                   {pedalConfig?.nextPageKeys.map((key: string) => (
                     <span key={key} className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px] font-mono">
@@ -509,7 +509,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
                 </div>
               </div>
               <div className="bg-background/40 p-4 rounded-xl border border-white/5 group hover:border-primary/20 transition-all">
-                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">上一页映射 (Prev)</p>
+                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">上一页映射 (前翻)</p>
                 <div className="flex flex-wrap gap-2">
                   {pedalConfig?.prevPageKeys.map((key: string) => (
                     <span key={key} className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px] font-mono">
@@ -587,7 +587,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           <div className="hardware-card p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">当前活跃组群 (Active)</p>
+                <p className="mono-label mb-1">当前活跃组群 (活跃)</p>
                 <p className="text-xs text-on-background/50">当前加入且活跃的排练群组</p>
               </div>
               <div className="flex items-center gap-3">

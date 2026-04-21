@@ -41,6 +41,9 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
       } else {
         // --- 注册逻辑 ---
         await apiService.auth.register({ email, password, name });
+        // 注册成功后
+        setError('注册成功！正在为您自动登录...');
+        
         // 注册成功后，为了用户体验，自动帮用户在后台调一次登录
         const loginResponse = await apiService.auth.login({ email, password });
         localStorage.setItem('nocturne_token', loginResponse.token);
