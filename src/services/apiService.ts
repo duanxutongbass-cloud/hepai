@@ -29,7 +29,18 @@ export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
   if (stored) return stored;
 
-  // 生产环境：直接指向公网域名
+  // 1. 优先使用构建时通过环境变量“烘焙”进去的地址
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+
+  // 2. 如果是网页访问，且不是本地开发/IDE环境，则自动使用当前网页地址
+  if (typeof window !== 'undefined' && 
+      !window.location.hostname.includes('localhost') && 
+      !window.location.hostname.includes('ai.studio')) {
+    return window.location.origin;
+  }
+
+  // 3. 最终保底：您的公网域名
   return 'http://dxtbass.huazo.xyz:4000'; 
 };
 
@@ -72,6 +83,14 @@ export const apiService = {
     return `${baseUrl}/${path.replace(/\\/g, '/')}`;
   },
 
+  // 维护接口：健康检查
+  maintenance: {
+    testConnection: (url: string) => {
+      const target = url.endsWith('/') ? url.slice(0, -1) : url;
+      return axios.get(`${target}/api/db-test`, { timeout: 5000 });
+    }
+  },
+  
   // 用户认证相关接口
   auth: {
     login: (credentials: any) => api.post('/api/auth/login', credentials) as Promise<any>,

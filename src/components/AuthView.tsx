@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
-import { Mail, Lock, User, ArrowRight, ChevronLeft, ShieldCheck, Music, Globe, Cloud, AlertCircle } from 'lucide-react';
-import { apiService } from '../services/apiService';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Mail, Lock, User, ArrowRight, ChevronLeft, ShieldCheck, Music, Globe, Cloud, AlertCircle, Settings, Server, Check } from 'lucide-react';
+import { apiService, getServerUrl, setServerUrl } from '../services/apiService';
 
 /**
  * 身份验证视图（登录/注册页面）
@@ -14,6 +14,8 @@ interface AuthViewProps {
 export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
   // 页面状态：isLogin 为 true 表示登录模式，false 表示注册模式
   const [isLogin, setIsLogin] = useState(true);
+  const [showServerSettings, setShowServerSettings] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState(getServerUrl());
   
   // 表单输入项
   const [email, setEmail] = useState('');
@@ -23,6 +25,11 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
   // UI 交互状态
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const saveServerSettings = () => {
+    setServerUrl(serverUrlInput);
+    setShowServerSettings(false);
+  };
 
   /**
    * 处理表单提交
@@ -74,14 +81,85 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* 顶部标题栏 */}
-      <header className="p-6 flex items-center gap-4">
-        <button onClick={onBack} className="p-2 hover:bg-surface-container rounded-full transition-colors">
-          <ChevronLeft className="w-6 h-6" />
+      <header className="p-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-2 hover:bg-surface-container rounded-full transition-colors">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h1 className="font-headline font-bold text-xl">{isLogin ? '欢迎回来' : '创建账号'}</h1>
+        </div>
+        <button 
+          onClick={() => setShowServerSettings(!showServerSettings)}
+          className={`p-2 rounded-full transition-all ${showServerSettings ? 'bg-primary text-on-primary rotate-90' : 'hover:bg-surface-container text-on-background/40'}`}
+        >
+          <Settings className="w-6 h-6" />
         </button>
-        <h1 className="font-headline font-bold text-xl">{isLogin ? '欢迎回来' : '创建账号'}</h1>
       </header>
 
-      <main className="flex-1 px-6 py-8 max-w-md mx-auto w-full space-y-8">
+      <main className="flex-1 px-6 py-8 max-w-md mx-auto w-full space-y-8 relative">
+        {/* 服务器设置面板 */}
+        <AnimatePresence>
+          {showServerSettings && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              className="absolute inset-x-6 top-0 z-50 bg-surface-container-highest p-6 rounded-3xl border border-primary/20 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 text-primary">
+                <Server className="w-5 h-5" />
+                <h3 className="font-bold">服务器连接设置</h3>
+              </div>
+              <p className="text-[10px] text-on-background/50 leading-relaxed">
+                如果您在内网环境或公网域名不可用，请手动输入您的 NAS IP 地址（需包含 http:// 和 4000 端口）。
+              </p>
+              <div className="space-y-2">
+                <input 
+                  type="text"
+                  value={serverUrlInput}
+                  onChange={(e) => setServerUrlInput(e.target.value)}
+                  className="w-full bg-background border border-outline-variant/20 rounded-xl py-3 px-4 text-sm font-mono outline-none focus:ring-2 ring-primary/20"
+                  placeholder="http://192.168.x.x:4000"
+                />
+                
+                {window.location.protocol === 'https:' && serverUrlInput.startsWith('http:') && (
+                  <div className="p-2 bg-amber-500/10 rounded-lg flex items-start gap-2 border border-amber-500/20">
+                    <AlertCircle className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-[9px] text-amber-500 leading-tight">
+                      <b>Mixed Content 警告</b>：您正在通过 HTTPS 访问网页，无法连接 HTTP 地址。请尝试改用 https:// 或直接访问内网版网页。
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                        await apiService.maintenance.testConnection(serverUrlInput);
+                        alert('✅ 连接成功！服务器已响应');
+                      } catch (e: any) {
+                        alert(`❌ 连接失败：${e.message}\n请检查域名、端口转发或 HTTPS 证书配置。`);
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="bg-surface-container py-3 rounded-xl font-bold text-xs hover:bg-surface-container-high transition-colors"
+                  >
+                    测试连接
+                  </button>
+                  <button 
+                    onClick={saveServerSettings}
+                    className="bg-primary text-on-primary py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    保存并应用
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         {/* LOGO 区域 */}
         <div className="text-center space-y-2">
           <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-4">
