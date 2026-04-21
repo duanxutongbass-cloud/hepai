@@ -179,7 +179,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
               </p>
             </div>
             <p className="text-[9px] font-mono text-on-background/20 uppercase tracking-widest">
-              Build v1.1.0 • Professional Grade
+              Build v1.2.1 • Professional Grade
             </p>
           </div>
         </div>
