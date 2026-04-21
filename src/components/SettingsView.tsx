@@ -5,6 +5,7 @@ import { storageService, Setlist, ScoreData } from '../services/storageService';
 import { getServerUrl, setServerUrl } from '../services/apiService';
 import JSZip from 'jszip';
 import { openDB } from 'idb';
+import HelpManual from './HelpManual';
 
 interface SettingsViewProps {
   isAdmin: boolean;
@@ -31,6 +32,13 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [serverUrl, setServerUrlInput] = useState(getServerUrl());
   const [isEditingServer, setIsEditingServer] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+  const [adminModal, setAdminModal] = useState<'folders' | 'roles' | 'sync' | null>(null);
+  const [isShowingManual, setIsShowingManual] = useState(false);
+  
+  // Real-time stats states
+  const [scoreCount, setScoreCount] = useState<number>(0);
+  const [totalStorage, setTotalStorage] = useState<string>('0MB');
 
   // States for the newly restored logic
   const [keepScreenOn, setKeepScreenOn] = useState(true);
@@ -76,6 +84,17 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
       if (meta.tickSound) setTickSound(meta.tickSound);
       if (meta.realtimePush !== undefined) setRealtimePush(meta.realtimePush);
       if (meta.notifConfig) setNotifConfig(meta.notifConfig);
+
+      // Calculate real-time stats
+      const allScores = await storageService.getAllScores();
+      setScoreCount(allScores.length);
+      
+      let bytes = 0;
+      allScores.forEach(s => {
+        if (s.blob) bytes += s.blob.size;
+      });
+      const mb = (bytes / (1024 * 1024)).toFixed(1);
+      setTotalStorage(`${mb}MB`);
     };
     loadData();
   }, []);
@@ -83,6 +102,18 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
   const updatePreference = async (key: string, value: any, setter: (v: any) => void) => {
     setter(value);
     await storageService.saveMetadata({ [key]: value });
+  };
+
+  const translateKey = (key: string) => {
+    const map: Record<string, string> = {
+      'ArrowRight': '右方向键',
+      'ArrowLeft': '左方向键',
+      'PageDown': '向下翻页键',
+      'PageUp': '向上翻页键',
+      'Space': '空格键',
+      'Enter': '向后回车'
+    };
+    return map[key] || key;
   };
 
   const showMessage = (text: string, type: 'info' | 'error' = 'info') => {
@@ -181,9 +212,9 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
         {/* Usage Stats Card */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: '库中乐谱', value: '124', icon: StickyNote },
+            { label: '库中乐谱', value: scoreCount.toString(), icon: StickyNote },
             { label: '云端同步', value: '100%', icon: RefreshCw },
-            { label: '存储占用', value: '42.8MB', icon: Database },
+            { label: '存储占用', value: totalStorage, icon: Database },
             { label: '系统状态', value: '良好', icon: Shield },
           ].map((stat, i) => (
             <div key={i} className="hardware-card p-4 flex flex-col items-center justify-center text-center">
@@ -448,7 +479,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           <div className="hardware-card p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">Bluetooth Pedal Sync</p>
+                <p className="mono-label mb-1">蓝牙踏板同步 (Bluetooth)</p>
                 <p className="text-xs text-on-background/50">控制蓝牙翻页踏板的响应状态</p>
               </div>
               <button 
@@ -465,28 +496,28 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-background/40 p-4 rounded-xl border border-white/5 group hover:border-primary/20 transition-all">
-                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">Next Page Action</p>
+                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">下一页映射 (Next)</p>
                 <div className="flex flex-wrap gap-2">
                   {pedalConfig?.nextPageKeys.map((key: string) => (
                     <span key={key} className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px] font-mono">
-                      {key}
+                      {translateKey(key)}
                     </span>
                   ))}
                   <button className="px-2 py-0.5 border border-white/10 rounded text-[10px] text-on-background/30 hover:border-primary/30 hover:text-primary transition-all">
-                    + Add
+                    + 添加
                   </button>
                 </div>
               </div>
               <div className="bg-background/40 p-4 rounded-xl border border-white/5 group hover:border-primary/20 transition-all">
-                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">Prev Page Action</p>
+                <p className="text-[10px] font-mono text-primary/50 uppercase tracking-widest mb-2">上一页映射 (Prev)</p>
                 <div className="flex flex-wrap gap-2">
                   {pedalConfig?.prevPageKeys.map((key: string) => (
                     <span key={key} className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[10px] font-mono">
-                      {key}
+                      {translateKey(key)}
                     </span>
                   ))}
                   <button className="px-2 py-0.5 border border-white/10 rounded text-[10px] text-on-background/30 hover:border-primary/30 hover:text-primary transition-all">
-                    + Add
+                    + 添加
                   </button>
                 </div>
               </div>
@@ -503,7 +534,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
             </div>
             <div className="hardware-card overflow-hidden">
               <button 
-                onClick={() => onViewChange('library')} // Usually a modal, but for now redirect
+                onClick={() => setAdminModal('folders')}
                 className="w-full flex items-center justify-between p-5 hover:bg-white/5 border-b border-white/5 group transition-colors"
               >
                 <div className="flex items-center gap-4">
@@ -517,6 +548,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
               </button>
               
               <button 
+                onClick={() => setAdminModal('roles')}
                 className="w-full flex items-center justify-between p-5 hover:bg-white/5 border-b border-white/5 group transition-colors"
               >
                 <div className="flex items-center gap-4">
@@ -530,6 +562,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
               </button>
 
               <button 
+                onClick={() => setAdminModal('sync')}
                 className="w-full flex items-center justify-between p-5 hover:bg-white/5 group transition-colors"
               >
                 <div className="flex items-center gap-4">
@@ -554,7 +587,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           <div className="hardware-card p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">Active Orchestra</p>
+                <p className="mono-label mb-1">当前活跃组群 (Active)</p>
                 <p className="text-xs text-on-background/50">当前加入且活跃的排练群组</p>
               </div>
               <div className="flex items-center gap-3">
@@ -567,7 +600,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="mono-label mb-1">Real-time Push</p>
+                <p className="mono-label mb-1">同步推送状态 (Sync)</p>
                 <p className="text-xs text-on-background/50">接收来自指挥或首席的实时翻页指令</p>
               </div>
               <button 
@@ -714,51 +747,6 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           </div>
         </section>
 
-        {/* Server Config */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Server className="text-primary w-5 h-5 shadow-[0_0_10px_rgba(137,172,255,0.4)]" />
-            <h2 className="font-headline font-bold text-xl uppercase tracking-tight">基础设施控制</h2>
-          </div>
-          <div className="hardware-card p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="mono-label mb-1">Server Interface</p>
-                <p className="text-xs text-on-background/50">当前后端服务接入点</p>
-              </div>
-            </div>
-            {isEditingServer ? (
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={serverUrl}
-                  onChange={(e) => setServerUrlInput(e.target.value)}
-                  className="flex-1 bg-background border border-primary/30 rounded-xl px-4 py-2 text-sm font-mono focus:border-primary focus:outline-none transition-all"
-                />
-                <button onClick={handleUpdateServer} className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold hover:brightness-110">保存</button>
-                <button onClick={() => setIsEditingServer(false)} className="bg-surface-container text-on-background/50 px-4 py-2 rounded-xl text-xs font-bold">取消</button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between p-4 bg-background/50 rounded-xl border border-white/5 group">
-                <code className="text-xs text-primary font-mono tracking-wider">{getServerUrl() || '自动识别'}</code>
-                <button onClick={() => setIsEditingServer(true)} className="text-primary font-bold text-[10px] uppercase tracking-widest hover:underline">
-                  调整
-                </button>
-              </div>
-            )}
-            
-            <div className="h-px bg-white/5" />
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                <span className="text-xs font-bold text-on-background/60">网络响应时延 (Ping)</span>
-              </div>
-              <span className="text-xs font-mono text-success">14ms</span>
-            </div>
-          </div>
-        </section>
-
         {/* About & Support */}
         <section className="space-y-4">
           <div className="flex items-center gap-3">
@@ -766,14 +754,25 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
             <h2 className="font-headline font-bold text-xl uppercase tracking-tight">关于与支持</h2>
           </div>
           <div className="hardware-card overflow-hidden">
-            <div className="p-5 border-b border-white/5 flex items-center justify-between">
+            <div className="p-5 border-b border-white/5 flex items-center justify-between transition-colors active:bg-white/5" onClick={() => {
+              const newCount = tapCount + 1;
+              setTapCount(newCount);
+              if (newCount >= 7) {
+                setIsEditingServer(true);
+                showMessage('开发者模式：基础设施控制已启用');
+                setTapCount(0);
+              }
+            }}>
               <div className="flex items-center gap-4">
                 <FileJson className="w-5 h-5 text-on-background/30" />
                 <p className="text-sm font-bold opacity-80">当前版本</p>
               </div>
-              <p className="text-xs font-mono text-primary">v1.2.2-Stable (Pro)</p>
+              <p className="text-xs font-mono text-primary select-none">v1.2.3-Stable (Pro)</p>
             </div>
-            <div className="p-5 border-b border-white/5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors">
+            <div 
+              onClick={() => setIsShowingManual(true)}
+              className="p-5 border-b border-white/5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+            >
               <div className="flex items-center gap-4">
                 <Globe className="w-5 h-5 text-on-background/30" />
                 <p className="text-sm font-bold opacity-80">官方网站 / 帮助手册</p>
@@ -795,6 +794,34 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           </div>
         </section>
 
+        {/* Hidden Developer Mode: Server Config */}
+        {isEditingServer && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Server className="text-primary w-5 h-5 shadow-[0_0_10px_rgba(137,172,255,0.4)]" />
+              <h2 className="font-headline font-bold text-xl uppercase tracking-tight">开发者选项</h2>
+            </div>
+            <div className="hardware-card p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="mono-label mb-1">Server Interface Override</p>
+                  <p className="text-xs text-on-background/50">强制覆盖后端服务接入点</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={serverUrl}
+                  onChange={(e) => setServerUrlInput(e.target.value)}
+                  className="flex-1 bg-background border border-primary/30 rounded-xl px-4 py-2 text-sm font-mono focus:border-primary focus:outline-none transition-all"
+                />
+                <button onClick={handleUpdateServer} className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold hover:brightness-110">应用并重启</button>
+                <button onClick={() => setIsEditingServer(false)} className="bg-surface-container text-on-background/50 px-4 py-2 rounded-xl text-xs font-bold">关闭</button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Logout and Version */}
         <div className="pt-8 space-y-8">
           <button 
@@ -812,11 +839,94 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
               </p>
             </div>
             <p className="text-[9px] font-mono text-on-background/20 uppercase tracking-widest">
-              Build v1.2.2 • Professional Grade
+              Build v1.2.3 • Professional Grade
             </p>
           </div>
         </div>
       </main>
+
+      {/* Admin Modals */}
+      <AnimatePresence>
+        {adminModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 shadow-2xl">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAdminModal(null)}
+              className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg hardware-card p-0 overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-primary/5">
+                <h3 className="font-headline font-bold text-lg uppercase tracking-tight flex items-center gap-2">
+                  {adminModal === 'folders' && <><FolderArchive className="w-5 h-5 text-primary" /> 曲库分类管理</>}
+                  {adminModal === 'roles' && <><UserCheck className="w-5 h-5 text-primary" /> 成员角色审计</>}
+                  {adminModal === 'sync' && <><Network className="w-5 h-5 text-primary" /> 多端同步策略</>}
+                </h3>
+                <button onClick={() => setAdminModal(null)} className="p-2 hover:bg-white/10 rounded-full text-on-background/40 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                {adminModal === 'folders' && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-on-background/60 text-center leading-relaxed">正在同步文件夹层级结构与声部标签数据库...</p>
+                    <div className="space-y-2">
+                      {['第一小提琴', '第二小提琴', '中提琴', '大提琴', '低音提琴'].map(part => (
+                        <div key={part} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                          <span className="text-xs font-bold">{part}</span>
+                          <span className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded cursor-pointer">配置标签</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {adminModal === 'roles' && (
+                  <div className="text-center py-8 space-y-4">
+                    <UserCheck className="w-12 h-12 text-primary/20 mx-auto" />
+                    <p className="text-xs text-on-background/40">当前暂无待处理的升权申请</p>
+                    <button className="px-6 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold border border-primary/20">查看所有已授权成员</button>
+                  </div>
+                )}
+                {adminModal === 'sync' && (
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <p className="mono-label">推流协议延迟阈值</p>
+                      <input type="range" className="w-full accent-primary" min={50} max={1000} defaultValue={200} />
+                      <div className="flex justify-between text-[10px] text-on-background/40 font-mono">
+                        <span>50ms (极低延迟)</span>
+                        <span>1000ms (强力缓冲)</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold opacity-80">启用集群心跳同步</p>
+                      <button className="w-10 h-5 rounded-full bg-primary relative"><div className="absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full" /></button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-background/50 border-t border-white/5 flex gap-3">
+                <button 
+                  onClick={() => {
+                    showMessage('设置已保存并同步至服务器');
+                    setAdminModal(null);
+                  }}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-xl text-xs font-bold hover:brightness-110 shadow-lg shadow-primary/20"
+                >
+                  保存更改
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Toast */}
       {message && (
@@ -824,6 +934,13 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
           <span className="font-bold text-sm">{message.text}</span>
         </div>
       )}
+
+      {/* Help Manual Overlay */}
+      <AnimatePresence>
+        {isShowingManual && (
+          <HelpManual onClose={() => setIsShowingManual(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
