@@ -17,7 +17,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 
 # 复制源码并构建
 COPY . .
-RUN npm run build
+RUN rm -rf dist && npm run build
 
 # --- 第二阶段: 运行环境 (Runtime) ---
 # 再次使用 Node 镜像是因为我们环境需要 python3 + node (或直接用 node 镜像里的 python)
