@@ -2,6 +2,7 @@
 import os
 import aiomysql
 import asyncio
+import logging
 from fastapi import FastAPI, Request, Depends, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -18,6 +19,18 @@ import hmac
 
 # 加载 .env 环境变量文件
 dotenv.load_dotenv()
+
+# --- 日志配置 (输出到文件以便 NAS 调试) ---
+log_file = "app_production.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("nocturne")
 
 # --- 配置加载 (从环境变量中读取，如果没有则使用默认值) ---
 DB_HOST = os.getenv("DB_HOST", "192.168.31.250")  # 数据库地址
@@ -58,7 +71,7 @@ db_pool = None # 数据库连接池占位符
 async def lifespan(app: FastAPI):
     """【生命周期管理】在服务器启动时连接数据库，在关闭时断开"""
     global db_pool
-    print(f"📡 正在尝试连接数据库服务器: {DB_HOST}:{DB_PORT}")
+    logger.info(f"📡 正在尝试连接数据库服务器: {DB_HOST}:{DB_PORT}")
     
     # 第一步：连接到 MySQL 控制台，确保数据库存在
     try:
@@ -71,7 +84,7 @@ async def lifespan(app: FastAPI):
             await cur.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4")
         temp_conn.close()
     except Exception as e:
-        print(f"❌ 数据库预连接失败: {e}")
+        logger.error(f"❌ 数据库预连接失败: {e}")
 
     # 第二步：初始化异步连接池（提升高并发性能）
     try:
@@ -81,14 +94,16 @@ async def lifespan(app: FastAPI):
             db=DB_NAME, autocommit=True, charset='utf8mb4'
         )
         await init_db() # 启动时同步表结构
+        logger.info("✅ 数据库服务已就绪")
     except Exception as e:
-        print(f"❌ 连接池初始化失败: {e}")
+        logger.error(f"❌ 连接池初始化失败: {e}")
     
     yield # 代码运行期间在此等待
     
     if db_pool:
         db_pool.close()
         await db_pool.wait_closed()
+        logger.info("🔌 数据库连接已断开")
 
 app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan)
 

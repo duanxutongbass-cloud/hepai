@@ -1,0 +1,9 @@
+{
+  "appId": "com.nocturne.sync",
+  "appName": "合拍 Nocturne",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

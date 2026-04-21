@@ -28,11 +28,14 @@ export const setServerUrl = (url: string) => {
 
 /**
  * 获取当前正在使用的服务器基础地址
- * 默认使用当前浏览器所在的域名/IP
+ * 在真正的 App 生产环境中，这里通常会指定您的公网域名。
  */
 export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
-  return stored || window.location.origin;
+  if (stored) return stored;
+
+  // 生产环境：直接指向您的公网域名（注意：请确保端口号与您转发的外部端口一致）
+  return 'http://dxtbass.huazo.xyz:4000'; 
 };
 
 // 【请求拦截器】
