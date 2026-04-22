@@ -2,6 +2,8 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { X, BookOpen, Music, Share2, Shield, Zap, Download, RefreshCw, Cpu } from 'lucide-react';
 
+import pkg from '../../package.json';
+
 interface HelpManualProps {
   onClose: () => void;
 }
@@ -30,7 +32,7 @@ export default function HelpManual({ onClose }: HelpManualProps) {
             </div>
             <div>
               <h2 className="text-xl font-headline font-black text-on-background tracking-tighter uppercase">Nocturne Sync 帮助手册</h2>
-              <p className="text-[10px] font-mono text-primary font-bold tracking-widest">USER DOCUMENTATION v1.2.3</p>
+              <p className="text-[10px] font-mono text-primary font-bold tracking-widest">USER DOCUMENTATION v{pkg.version}</p>
             </div>
           </div>
           <button 

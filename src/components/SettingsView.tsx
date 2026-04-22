@@ -7,6 +7,8 @@ import JSZip from 'jszip';
 import { openDB } from 'idb';
 import HelpManual from './HelpManual';
 
+import pkg from '../../package.json';
+
 interface SettingsViewProps {
   isAdmin: boolean;
   setIsAdmin: (isAdmin: boolean) => void;
@@ -767,7 +769,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
                 <FileJson className="w-5 h-5 text-on-background/30" />
                 <p className="text-sm font-bold opacity-80">当前版本</p>
               </div>
-              <p className="text-xs font-mono text-primary select-none">v1.2.3-Stable (Pro)</p>
+              <p className="text-xs font-mono text-primary select-none">v{pkg.version}-Stable (Pro)</p>
             </div>
             <div 
               onClick={() => setIsShowingManual(true)}
@@ -839,7 +841,7 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
               </p>
             </div>
             <p className="text-[9px] font-mono text-on-background/20 uppercase tracking-widest">
-              Build v1.2.3 • Professional Grade
+              Build v{pkg.version} • Professional Grade
             </p>
           </div>
         </div>
