@@ -16,6 +16,17 @@ if (typeof (Promise as any).withResolvers === 'undefined') {
   };
 }
 
+// Polyfill for URL.parse (standardized recently, missing in some Android/iOS WebViews)
+if (typeof (URL as any).parse === 'undefined') {
+  (URL as any).parse = function(url: string, base?: string | URL) {
+    try {
+      return new URL(url, base);
+    } catch (e) {
+      return null;
+    }
+  };
+}
+
 registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(

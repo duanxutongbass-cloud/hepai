@@ -58,7 +58,8 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
       }
     } catch (err: any) {
       console.error('Auth Full Error:', err);
-      let errorMsg = '连接失败：请检查 NAS 上的 4000 端口映射或防火墙设置';
+      const targetUrl = getServerUrl();
+      let errorMsg = `连接失败 [${targetUrl}]：请检查 NAS 上的 4000 端口映射或防火墙设置`;
       
       if (err.response) {
         // 【服务器报错】比如：密码错误、邮箱已存在等
@@ -66,7 +67,12 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
         errorMsg = err.response.data?.detail || err.response.data?.error || `服务器错误 (${err.response.status})`;
       } else if (err.request) {
         // 【网络断开】无法建立 TCP 连接（NAS IP 错或者防火墙拦了）
-        errorMsg = '无法连接到服务器：请确保您正在访问的是 NAS 的内网 IP，且 Docker 容器正在运行';
+        errorMsg = `无法连接到服务器 (${targetUrl})：请确保您正在访问的是 NAS 的 IP (包含 http:// 和 4000 端口)，且 Docker 容器正在运行。`;
+        
+        // 专门针对 Mixed Content 的提示
+        if (window.location.protocol === 'https:' && targetUrl.startsWith('http:')) {
+          errorMsg += ' 注意：您正在使用 HTTPS 访问，无法连接到 HTTP 服务器。请尝试使用 https:// 或更换非加密浏览器访问。';
+        }
       } else {
         // 【系统配置错误】
         errorMsg = `请求配置错误: ${err.message}`;
