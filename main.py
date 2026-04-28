@@ -16,6 +16,13 @@ from passlib.context import CryptContext
 from contextlib import asynccontextmanager
 import hashlib
 import hmac
+import time
+from collections import defaultdict
+
+# --- 登录限流配置 ---
+LOGIN_ATTEMPTS = defaultdict(list)
+MAX_LOGIN_ATTEMPTS = 5
+LOCK_TIME = 300 # 5分钟内超过5次失败则锁定
 
 # 加载 .env 环境变量文件
 dotenv.load_dotenv()
@@ -50,7 +57,15 @@ def check_config_encoding():
 check_config_encoding()
 
 UPLOAD_DIR = "uploads"                            # 乐谱 PDF 存放目录
-SECRET_KEY = os.getenv("JWT_SECRET", "nocturne_reader_secret_key") # JWT 加密密钥
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY:
+    logger.error("🛑 错误: 未配置 JWT_SECRET 环境变量！为了安全，系统拒绝启动。")
+    # 如果是本地开发环境，提供一个显式的弱密钥提示，但在生产环境必须报错
+    if os.getenv("NODE_ENV") != "production":
+         SECRET_KEY = "dev_secret_only_for_local_test"
+    else:
+         raise RuntimeError("JWT_SECRET environment variable is missing")
+
 ALGORITHM = "HS256"                               # 加密签名算法
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7        # 登录有效期：7天
 
@@ -60,10 +75,12 @@ if not os.path.exists(UPLOAD_DIR):
 
 # --- 核心安全函数 (手动实现 SHA256 加密，解决群晖 NAS 驱动兼容问题) ---
 
+HASH_ITERATIONS = 310000
+
 def hash_password(password: str):
     """【加密函数】将明文密码转换为 盐值+哈希 的形式"""
     salt = os.urandom(16) # 生成随机盐，防止彩虹表攻击
-    hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, HASH_ITERATIONS)
     return salt.hex() + ":" + hash_obj.hex()
 
 def verify_password(plain_password: str, hashed_password: str):
@@ -71,7 +88,7 @@ def verify_password(plain_password: str, hashed_password: str):
     try:
         salt_hex, hash_hex = hashed_password.split(":")
         salt = bytes.fromhex(salt_hex)
-        expected_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode(), salt, 100000)
+        expected_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode(), salt, HASH_ITERATIONS)
         return hmac.compare_digest(expected_hash.hex(), hash_hex)
     except:
         return False # 格式不正确或对比失败
@@ -119,10 +136,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan)
 
 # --- 跨域策略 (允许前端与后端通讯) ---
+allowed_origins = [
+    "https://dxtbass.top",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://ais-pre-b56ecwsw35s26kpt6bsgul-194206035772.us-east5.run.app", # 允许 AI Studio 预览
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 允许任何地址访问
-    allow_credentials=False,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -209,7 +233,7 @@ class RegisterItem(BaseModel):
 
 # --- 接口：用户登录 ---
 @app.post("/api/auth/login")
-async def login(item: LoginItem):
+async def login(item: LoginItem, request: Request):
     if not db_pool:
         raise HTTPException(status_code=503, detail="服务器数据库连接失败")
     async with db_pool.acquire() as conn:
@@ -217,9 +241,24 @@ async def login(item: LoginItem):
             try:
                 await cur.execute("SELECT * FROM users WHERE email = %s", (item.email,))
                 user = await cur.fetchone()
+                
+                # 限流检查 (基于 IP)
+                ip = request.client.host
+                now = time.time()
+                # 清理旧记录
+                LOGIN_ATTEMPTS[ip] = [t for t in LOGIN_ATTEMPTS[ip] if now - t < LOCK_TIME]
+                if len(LOGIN_ATTEMPTS[ip]) >= MAX_LOGIN_ATTEMPTS:
+                    logger.warning(f"🚫 登录拦截: IP {ip} 尝试频率过高")
+                    raise HTTPException(status_code=429, detail="登录尝试次数过多，请5分钟后再试")
+
                 # 检查用户是否存在，并验证手动生成的哈希密码
                 if not user or not verify_password(item.password, user.get('password')):
+                    LOGIN_ATTEMPTS[ip].append(now)
                     raise HTTPException(status_code=401, detail="邮箱或密码错误")
+                
+                # 登录成功，清除该 IP 的失败记录
+                if ip in LOGIN_ATTEMPTS:
+                    del LOGIN_ATTEMPTS[ip]
                 
                 # 生成登录凭证
                 token = create_access_token({"sub": user.get('email'), "id": user.get('id')})
@@ -268,14 +307,27 @@ async def list_scores():
             return await cur.fetchall()
 
 # --- 接口：上传乐谱 ---
+MAX_FILE_SIZE = 20 * 1024 * 1024 # 20MB
+ALLOWED_EXTENSIONS = {".pdf"}
+
 @app.post("/api/scores")
 async def upload_score(title: str = Form(...), category: str = Form(""), file: UploadFile = File(...)):
+    # 1. 验证文件后缀
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="只允许上传 PDF 格式的乐谱")
+    
+    # 2. 验证文件大小 (流式读取验证)
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
+    
     file_path = f"uploads/{file.filename}"
     abs_path = os.path.join(UPLOAD_DIR, file.filename)
     
     # 将上传的文件保存到硬盘
     with open(abs_path, "wb") as buffer:
-        buffer.write(await file.read())
+        buffer.write(content)
     
     async with db_pool.acquire() as conn:
         async with conn.cursor() as cur:

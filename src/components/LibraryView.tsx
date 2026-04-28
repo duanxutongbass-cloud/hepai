@@ -659,9 +659,26 @@ export default function LibraryView({ onOpenScore, isAdmin, setIsAdmin, onViewCh
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const newPending: { file: File, scoreTitle: string, suggestedPartName: string, ambiguous: boolean }[] = [];
+    const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+    const validFiles: File[] = [];
 
     for (const file of files) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showMessage(`文件 ${file.name} 不是 PDF 格式`, 'error');
+        continue;
+      }
+      if (file.size > MAX_SIZE) {
+        showMessage(`文件 ${file.name} 超过 20MB 限制`, 'error');
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const newPending: { file: File, scoreTitle: string, suggestedPartName: string, ambiguous: boolean }[] = [];
+
+    for (const file of validFiles) {
       const filename = file.name.replace('.pdf', '');
       let scoreTitle = filename;
       let partName = '';

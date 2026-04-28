@@ -66,6 +66,21 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((response) => {
   return response.data;
 }, (error) => {
+  // 增强错误处理，不再静默吞掉异常
+  if (error.response) {
+    const { status, data } = error.response;
+    console.error(`🔴 API 响应错误 [${status}]:`, data?.detail || data || error.message);
+    
+    // 自动重定向处理
+    if (status === 401 && !window.location.hash.includes('login')) {
+      console.warn('登录已失效，正在清除凭证并建议重新登录');
+      localStorage.removeItem('nocturne_token');
+    }
+  } else if (error.request) {
+    console.error('🔴 API 网络错误: 无法连接到服务器，请检查网络或服务器地址是否正确');
+  } else {
+    console.error('🔴 API 错误:', error.message);
+  }
   return Promise.reject(error);
 });
 
