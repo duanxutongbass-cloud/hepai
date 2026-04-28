@@ -238,6 +238,14 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
       setIsLoading(true);
       setLoadError(null);
       
+      // Safety Timeout: 15 seconds
+      const timeoutId = setTimeout(() => {
+        if (isLoading && !loadError) {
+          setLoadError('乐谱加载超时。如果您的服务器是 HTTP 且 App 是 HTTPS，请求可能已被浏览器拦截。');
+          setIsLoading(false);
+        }
+      }, 15000);
+      
       try {
         // Load program for navigation
         const meta = await storageService.getMetadata();
@@ -296,6 +304,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
         console.error('Score Load Failed:', err);
         setLoadError(err.message || '乐谱读取失败，请检查网络或重试');
       } finally {
+        clearTimeout(timeoutId);
         setIsLoading(false);
       }
     };
@@ -1061,7 +1070,7 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
         >
           <AnimatePresence mode="wait">
             <motion.div 
-              key={`${pageNumber}-${currentPartIndex}`}
+              key={`${pageNumber}-${currentPartIndex}-${pdfUrl}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -1077,11 +1086,21 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
               onMouseUp={handleDragEnd}
               onMouseLeave={handleDragEnd}
             >
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white z-10 px-6 text-center">
+              {isLoading && !loadError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm z-50 px-6 text-center">
                   <div className="space-y-4">
                     <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-                    <p className="text-sm font-bold text-on-background/40">正在加载专业乐谱数据...</p>
+                    <p className="text-sm font-bold text-on-background/60">正在加载渲染引擎与文件...</p>
+                    {window.location.protocol === 'https:' && typeof pdfUrl === 'string' && pdfUrl.startsWith('http:') && (
+                      <div className="mt-4 p-4 bg-error/10 border border-error/20 rounded-2xl">
+                        <AlertCircle className="w-5 h-5 text-error mx-auto mb-2" />
+                        <p className="text-xs text-error font-bold leading-tight">
+                          Mixed Content Blocked!<br/>
+                          App (HTTPS) 无法加载来自 HTTP 链接的乐谱文件。<br/>
+                          请将服务器设置为 HTTPS 访问。
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1127,16 +1146,20 @@ export default function ReaderView({ onBack, scoreId, isAdmin, onNavigateScore, 
                     onLoadSuccess={onDocumentLoadSuccess}
                     onLoadError={(error) => {
                       console.error('PDF Load Error:', error);
-                      // If it fails, try to re-generate the URL
-                      if (pdfFile instanceof Blob) {
-                        const newUrl = URL.createObjectURL(pdfFile);
-                        setPdfUrl(newUrl);
-                      }
+                      setIsLoading(false);
+                      setLoadError(`乐谱渲染失败: ${error.message || '未知错误'}。可能由于浏览器跨域拦截或文件损坏。`);
                     }}
                     loading={
                       <div className="flex flex-col items-center gap-4">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
                         <p className="text-xs font-bold text-primary/40 animate-pulse">正在加载乐谱...</p>
+                        {window.location.protocol === 'https:' && typeof pdfUrl === 'string' && pdfUrl.startsWith('http:') && (
+                          <div className="mt-4 p-4 bg-error/10 border border-error/20 rounded-xl max-w-[200px]">
+                            <p className="text-[10px] text-error font-bold leading-tight">
+                              ⚠️ 检测到混合内容拦截！App 为 HTTPS，但乐谱为 HTTP。请将服务器改为 HTTPS 访问。
+                            </p>
+                          </div>
+                        )}
                       </div>
                     }
                     error={

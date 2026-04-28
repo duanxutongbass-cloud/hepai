@@ -14,6 +14,7 @@ import BottomNav from './components/BottomNav';       // 底部导航栏
 import ProfileView from './components/ProfileView';   // 个人中心
 import AuthView from './components/AuthView';         // 登录注册
 import RecentPerformancesView from './components/RecentPerformancesView'; // 最近演出记录
+import { IconSelectionView } from './components/IconSelectionView'; // 图标选择
 
 // 引入服务层
 import { apiService } from './services/apiService';
@@ -21,7 +22,7 @@ import { storageService } from './services/storageService';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // 定义可能的视图类型
-export type View = 'library' | 'setlist' | 'sync' | 'settings' | 'reader' | 'recent' | 'profile' | 'auth';
+export type View = 'library' | 'setlist' | 'sync' | 'settings' | 'reader' | 'recent' | 'profile' | 'auth' | 'icons';
 
 /**
  * 应用主入口组件
@@ -61,7 +62,7 @@ export default function App() {
       if (isLoggedIn) {
         try {
           // 定义需要从云端强制同步的键名
-          const keys = ['folders', 'roles', 'partTags', 'userRole', 'profile'] as const;
+          const keys = ['folders', 'roles', 'partTags', 'userRole', 'profile', 'brandIcon'] as const;
           for (const key of keys) {
             try {
               const cloudVal = await apiService.metadata.get(key);
@@ -190,6 +191,9 @@ export default function App() {
                 onViewChange={setCurrentView}
                 onLogout={handleLogout}
               />
+            )}
+            {currentView === 'icons' && (
+              <IconSelectionView onBack={() => setCurrentView('settings')} />
             )}
             {currentView === 'reader' && (
               <ReaderView 

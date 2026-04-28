@@ -40,8 +40,9 @@ export const getServerUrl = () => {
     return window.location.origin;
   }
 
-  // 3. 最终保底：您的公网域名
-  return 'http://dxtbass.huazo.xyz:4000'; 
+  // 3. 最终保底：您的阿里云服务器或域名
+  // 配置提示：部署到阿里云后，请确保使用 HTTPS 以避免混合内容拦截
+  return 'https://dxtbass.top'; 
 };
 
 // 【请求拦截器】

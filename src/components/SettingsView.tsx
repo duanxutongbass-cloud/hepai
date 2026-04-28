@@ -1,4 +1,4 @@
-import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown, Radio, Server, LogOut, Music, Zap, ShieldAlert, Archive } from 'lucide-react';
+import { Menu, Bell, Settings, Network, StickyNote, FolderArchive, History, BarChart, Activity, User, RefreshCw, UserCheck, Users, CheckCircle2, AlertCircle, CheckCircle, X, ChevronRight, Shield, Palette, Globe, Type, Database, Info, FileJson, DownloadCloud, Trash2, ChevronDown, Radio, Server, LogOut, Music, Zap, ShieldAlert, Archive, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService, Setlist, ScoreData } from '../services/storageService';
@@ -63,6 +63,12 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
     if (!serverUrl.startsWith('http')) {
       return showMessage('请输入正确的地址 (以 http:// 开头)', 'error');
     }
+    
+    // Mixed Content Detection
+    if (window.location.protocol === 'https:' && serverUrl.startsWith('http:')) {
+      return showMessage('检测到混合内容风险：当前 App 使用 HTTPS，无法连接 HTTP 服务器。请使用 HTTPS 地址。', 'error');
+    }
+
     setServerUrl(serverUrl);
     showMessage('服务器地址已更新，正在重新连接...');
     setIsEditingServer(false);
@@ -374,6 +380,29 @@ export default function SettingsView({ isAdmin, setIsAdmin, onViewChange, onLogo
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Brand Visuals Selection */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="text-primary w-5 h-5 shadow-[0_0_10px_rgba(137,172,255,0.4)]" />
+            <h2 className="font-headline font-bold text-xl uppercase tracking-tight">品牌视觉与识别</h2>
+          </div>
+          <div className="hardware-card p-6 flex items-center justify-between group cursor-pointer hover:border-primary/40 transition-all" onClick={() => onViewChange('icons')}>
+            <div className="flex items-center gap-5">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 group-hover:scale-110 transition-transform">
+                <Zap className="w-6 h-6 fill-primary/20" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-on-background/80 mb-1">图标方案评选</p>
+                <p className="text-[10px] text-on-background/40">预览并选择 Nocturne Sync 的正式应用图标</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-widest">New</span>
+              <ChevronRight className="w-5 h-5 text-primary" />
+            </div>
+          </div>
+        </section>
 
         {/* Reader Preferences */}
         <section className="space-y-4">

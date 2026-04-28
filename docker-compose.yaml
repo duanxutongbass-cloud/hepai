@@ -1,23 +1,40 @@
 version: '3.8'
 
 services:
+  # Database Service (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: nocturne-db
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=A9878480a! 
+      - MYSQL_DATABASE=nocturne_sync
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  # Backend Application Service
   nocturne-app:
     build: .
     container_name: nocturne-sync-server
     restart: always
+    depends_on:
+      - db
     ports:
       - "4000:3000"
     environment:
       - NODE_ENV=production
-      - DB_HOST=192.168.31.250     # 您的群晖 NAS IP
+      - DB_HOST=db                 # 使用容器服务名连接
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=A9878480a!    # 数据库密码
+      - DB_PASSWORD=A9878480a!
       - DB_NAME=nocturne_sync
       - JWT_SECRET=nocturne_reader_secret_key
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - ./uploads:/app/uploads     # 仅持久化上传目录
+      - ./uploads:/app/uploads
+      - ./dist:/app/dist           # 映射构建出的前端代码
 
 networks:
   default:
