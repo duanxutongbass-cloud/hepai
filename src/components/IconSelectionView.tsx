@@ -227,10 +227,7 @@ export function IconSelectionView({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
               <button 
-                onClick={() => {
-                  alert(`已记录您的选择：${concepts.find(c => c.id === selectedId)?.name}。我将开始处理发布资产。`);
-                  onBack();
-                }}
+                onClick={handleConfirm}
                 className="w-full sm:w-auto px-12 py-4 bg-primary text-on-primary rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-105 transition-all"
               >
                 确认以此作为正式图标

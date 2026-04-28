@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
 
 # 复制后端依赖并安装
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt --break-system-packages
+RUN pip3 install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt --break-system-packages
 
 # 从 builder 阶段复制构建好的静态文件
 COPY --from=builder /app/dist ./dist
