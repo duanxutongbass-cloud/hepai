@@ -27,6 +27,13 @@ export const setServerUrl = (url: string) => {
  */
 export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
+  
+  // 智能修复：如果以前保存的是旧域名(dxtbass.top)，而当前正在访问新域名(dxthepai.top)，则清除旧缓存
+  if (stored && stored.includes('dxtbass.top') && typeof window !== 'undefined' && window.location.hostname.includes('dxthepai.top')) {
+    localStorage.removeItem('nocturne_server_url');
+    return window.location.origin;
+  }
+
   if (stored) return stored;
 
   // 1. 优先使用构建时通过环境变量“烘焙”进去的地址
@@ -40,9 +47,9 @@ export const getServerUrl = () => {
     return window.location.origin;
   }
 
-  // 3. 最终保底：您的阿里云服务器或域名
-  // 配置提示：部署到阿里云后，请确保使用 HTTPS 以避免混合内容拦截
-  return 'https://dxtbass.top'; 
+  // 3. 最终保底：您的服务器或域名
+  // 配置提示：部署到生产环境后，请确保使用 HTTPS
+  return 'https://www.dxthepai.top'; 
 };
 
 // 【请求拦截器】

@@ -138,6 +138,7 @@ app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan, ve
 # --- 跨域策略 (允许前端与后端通讯) ---
 allowed_origins = [
     "https://dxtbass.top",
+    "https://www.dxtbass.top",
     "https://www.dxthepai.top",
     "https://dxthepai.top",
     "http://localhost:3000",
