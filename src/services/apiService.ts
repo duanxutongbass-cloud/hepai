@@ -77,7 +77,15 @@ api.interceptors.response.use((response) => {
       localStorage.removeItem('nocturne_token');
     }
   } else if (error.request) {
-    console.error('🔴 API 网络错误: 无法连接到服务器，请检查网络或服务器地址是否正确');
+    const isHttps = window.location.protocol === 'https:';
+    const targetUrl = error.config?.url || '';
+    const isTargetHttp = targetUrl.startsWith('http:');
+    
+    if (isHttps && isTargetHttp) {
+      console.error('🔴 API 网络错误: 浏览器跨域拦截 (HTTPS -> HTTP)。由于当前页面使用加密连接(HTTPS)，浏览器不允许连接未加密的服务器(HTTP)。请更换为 https:// 地址，或在浏览器中允许该地址的“不安全内容”。');
+    } else {
+      console.error('🔴 API 网络错误: 无法连接到服务器，请检查网络或服务器地址是否正确。如果是 NAS 部署，请确保 4000 端口已映射且防火墙已放行。');
+    }
   } else {
     console.error('🔴 API 错误:', error.message);
   }

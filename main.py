@@ -133,11 +133,13 @@ async def lifespan(app: FastAPI):
         await db_pool.wait_closed()
         logger.info("🔌 数据库连接已断开")
 
-app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan)
+app = FastAPI(title="合拍 (Nocturne Sync) 后端服务", lifespan=lifespan, version="1.3.0")
 
 # --- 跨域策略 (允许前端与后端通讯) ---
 allowed_origins = [
     "https://dxtbass.top",
+    "https://www.dxthepai.top",
+    "https://dxthepai.top",
     "http://localhost:3000",
     "http://localhost:5173",
     "https://ais-pre-b56ecwsw35s26kpt6bsgul-194206035772.us-east5.run.app", # 允许 AI Studio 预览
@@ -307,7 +309,6 @@ async def list_scores():
             return await cur.fetchall()
 
 # --- 接口：上传乐谱 ---
-MAX_FILE_SIZE = 20 * 1024 * 1024 # 20MB
 ALLOWED_EXTENSIONS = {".pdf"}
 
 @app.post("/api/scores")
@@ -317,10 +318,8 @@ async def upload_score(title: str = Form(...), category: str = Form(""), file: U
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="只允许上传 PDF 格式的乐谱")
     
-    # 2. 验证文件大小 (流式读取验证)
+    # 2. 读取并保存文件 (无大小限制)
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
     
     file_path = f"uploads/{file.filename}"
     abs_path = os.path.join(UPLOAD_DIR, file.filename)
