@@ -161,6 +161,15 @@ export default function AuthView({ onBack, onSuccess }: AuthViewProps) {
                     <Check className="w-4 h-4" />
                     保存并应用
                   </button>
+                  <button 
+                    onClick={() => {
+                      setServerUrlInput(window.location.origin);
+                      localStorage.removeItem('nocturne_server_url');
+                    }}
+                    className="col-span-2 mt-2 py-2 text-[10px] font-bold text-primary/60 border border-primary/10 rounded-xl hover:bg-primary/5 transition-all"
+                  >
+                    重置为当前网页地址 (推荐)
+                  </button>
                 </div>
               </div>
             </motion.div>

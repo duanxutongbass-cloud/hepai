@@ -27,11 +27,23 @@ export const setServerUrl = (url: string) => {
  */
 export const getServerUrl = () => {
   const stored = localStorage.getItem('nocturne_server_url');
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isOfficialDomain = currentHostname.includes('dxthepai.top') || currentHostname.includes('dxtbass.top');
   
-  // 智能修复：如果以前保存的是旧域名(dxtbass.top)，而当前正在访问新域名(dxthepai.top)，则清除旧缓存
-  if (stored && stored.includes('dxtbass.top') && typeof window !== 'undefined' && window.location.hostname.includes('dxthepai.top')) {
-    localStorage.removeItem('nocturne_server_url');
-    return window.location.origin;
+  // 智能修复：如果以前保存的是旧域名或 IP 地址，而当前正在访问正式域名，则强制清除旧缓存并使用当前域名
+  // 这样可以解决 HTTPS 浏览器拦截访问 HTTP IP 的问题
+  if (stored && isOfficialDomain) {
+    const storedUrl = stored.toLowerCase();
+    const isStoredDifferent = !storedUrl.includes(currentHostname);
+    
+    // 如果存储的是 IP 地址或者是旧域名，或者是跨协议（HTTPS 访问但存储了 HTTP），自动清理
+    const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && storedUrl.startsWith('http:');
+    
+    if (isStoredDifferent || storedUrl.includes('182.92.97.3') || storedUrl.includes('dxtbass.top') || isMixedContent) {
+      console.log('🔄 检测到不兼容或旧的服务器配置，正在自动重置为安全连接...');
+      localStorage.removeItem('nocturne_server_url');
+      return window.location.origin;
+    }
   }
 
   if (stored) return stored;
